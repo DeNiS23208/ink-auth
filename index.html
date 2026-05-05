@@ -33,19 +33,24 @@
         <h1>Гуляев Денис Михайлович</h1>
       </div>
       <div class="brigades-page">
-        <button type="button" class="back-btn brigades-back-btn">← Назад</button>
+        <button type="button" class="back-btn brigades-back-btn">
+          ← Назад
+        </button>
         <h2>Выберите буровую бригаду</h2>
         <div class="brigades-grid">
           <!-- Генерируем 30 кубиков -->
         </div>
       </div>
       <div class="board-page" id="board-page">
-        <button type="button" class="back-btn board-back-btn wb-wall-btn">← Назад</button>
+        <button type="button" class="back-btn board-back-btn wb-wall-btn">
+          ← Назад
+        </button>
         <div class="wb-room" aria-hidden="true"></div>
         <div class="wb-board">
           <div class="whiteboard-wrap paint-sheet">
             <p class="wb-readonly-banner" id="wb-readonly-banner" hidden>
-              Просмотр начальника: редактировать может только мастер этой бригады.
+              Просмотр начальника: редактировать может только мастер этой
+              бригады.
             </p>
             <h2 class="paint-title" id="board-title">Оперативная доска — ББ</h2>
             <div class="paint-toolbar" id="paint-toolbar">
@@ -58,8 +63,13 @@
               <button type="button" data-tool="text">Текст</button>
               <button type="button" data-tool="textbox">Текст + рамка</button>
               <button type="button" data-tool="smartbox">Умная рамка</button>
-              <label>Цвет <input type="color" id="paint-color" value="#0d47a1" /></label>
-              <label>Толщина <input type="range" id="paint-size" min="1" max="24" value="3" /></label>
+              <label
+                >Цвет <input type="color" id="paint-color" value="#0d47a1"
+              /></label>
+              <label
+                >Толщина
+                <input type="range" id="paint-size" min="1" max="24" value="3"
+              /></label>
               <label
                 >Шрифт
                 <select id="paint-font-family">
@@ -84,7 +94,15 @@
                   <option value="Impact">Impact</option>
                 </select>
               </label>
-              <label>Размер текста <input type="range" id="paint-font-size" min="12" max="96" value="28" /></label>
+              <label
+                >Размер текста
+                <input
+                  type="range"
+                  id="paint-font-size"
+                  min="12"
+                  max="96"
+                  value="28"
+              /></label>
               <div class="paint-text-controls" id="paint-text-controls">
                 <button type="button" id="paint-bold">Жирный</button>
                 <button type="button" id="paint-italic">Курсив</button>
@@ -147,14 +165,17 @@
         <p class="error" id="error" role="alert"></p>
         <button class="btn" type="submit" id="submit">Открыть</button>
         <p class="hint">
-          <strong>Начальник</strong>: <code>boss</code> / <code>boss</code>
-          или <code>ink</code> / <code>ink</code> — просмотр всех досок ББ.<br />
-          <strong>Мастер ББ</strong>: логин <code>m1</code>…<code>m30</code>, пароль тот же номер (<code>1</code>…<code>30</code>)
-          — своя оперативка только по своей бригаде.
+          <strong>Начальник</strong>: <code>boss</code> / <code>boss</code> или
+          <code>ink</code> / <code>ink</code> — просмотр всех досок ББ.<br />
+          <strong>Мастер ББ</strong>: логин <code>m1</code>…<code>m30</code>,
+          пароль тот же номер (<code>1</code>…<code>30</code>) — своя оперативка
+          только по своей бригаде.
         </p>
       </form>
     </div>
     <script defer src="scripts/utils.js"></script>
+    <script defer src="scripts/auth.js"></script>
+    <script defer src="scripts/storage.js"></script>
     <script defer src="scripts/main.js"></script>
   </body>
 </html>

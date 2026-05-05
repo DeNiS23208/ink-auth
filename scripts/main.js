@@ -1,16 +1,6 @@
-const SUPERVISORS = {
-  boss: { password: "boss", name: "Начальник" },
-  ink: { password: "ink", name: "Начальник (демо)" },
-};
-
-const MASTERS = Object.fromEntries(
-  Array.from({ length: 30 }, (_, i) => {
-    const bb = i + 1;
-    return [`m${bb}`, { password: String(bb), bb, name: `Мастер ББ ${bb}` }];
-  }),
-);
-
-const STORAGE_PREFIX = "ink-auth-draw-bb-";
+// =========================
+// ГЛОБАЛЬНОЕ СОСТОЯНИЕ И КОНСТАНТЫ
+// =========================
 const MAX_HISTORY = 50;
 const PALETTE = [
   "#000000",
@@ -48,6 +38,9 @@ let textStyle = {
   strike: false,
 };
 
+// =========================
+// ССЫЛКИ НА ЭЛЕМЕНТЫ СТРАНИЦЫ (DOM)
+// =========================
 const page = document.getElementById("page");
 const form = document.getElementById("auth");
 const errorEl = document.getElementById("error");
@@ -62,7 +55,9 @@ const brigadesGrid = document.querySelector(".brigades-grid");
 const boardTitle = document.getElementById("board-title");
 const boardBackBtn = document.querySelector(".board-back-btn");
 const wbReadOnlyBanner = document.getElementById("wb-readonly-banner");
-const navBoardsItem = document.querySelector('.side-panel li[data-nav="boards"]');
+const navBoardsItem = document.querySelector(
+  '.side-panel li[data-nav="boards"]',
+);
 const brigadesPageTitle = document.querySelector(".brigades-page h2");
 const wbSaveHint = document.getElementById("wb-save-hint");
 
@@ -91,6 +86,9 @@ const IGNITE_BEFORE_OPEN_MS = window.matchMedia(
   ? 0
   : 760;
 
+// =========================
+// ЛОГИКА РОЛЕЙ И НАВИГАЦИИ
+// =========================
 wrapLetters(realm.querySelector("h1"));
 wrapLetters(realm.querySelectorAll("h1")[1]);
 
@@ -98,17 +96,7 @@ function canEditBoard() {
   return activeSession?.role === "master";
 }
 
-function authenticate(username, password) {
-  const sup = SUPERVISORS[username];
-  if (sup && sup.password === password) {
-    return { role: "supervisor", name: sup.name || username };
-  }
-  const m = MASTERS[username];
-  if (m && m.password === password) {
-    return { role: "master", bb: m.bb, name: m.name || username };
-  }
-  return null;
-}
+
 
 function updateNavBoardsLabel() {
   if (!navBoardsItem || !activeSession) return;
@@ -164,10 +152,11 @@ function setHint(text) {
   }, 2200);
 }
 
-function getStorageKey() {
-  return `${STORAGE_PREFIX}${currentBb}`;
-}
 
+
+// =========================
+// СОХРАНЕНИЕ ДОСКИ И ИСТОРИЯ ДЕЙСТВИЙ
+// =========================
 function pushHistory() {
   const data = canvas.toDataURL("image/png");
   if (history[historyStep] === data) return;
@@ -188,7 +177,7 @@ function restoreFromDataUrl(dataUrl) {
 
 function persistBoard() {
   if (!currentBb || !canEditBoard()) return;
-  localStorage.setItem(getStorageKey(), canvas.toDataURL("image/png"));
+  saveBoardToStorage(currentBb, canvas.toDataURL("image/png"));
   setHint("Сохранено локально в этом браузере.");
 }
 
@@ -227,7 +216,7 @@ function loadBoardDrawing(bb) {
   clearCanvas(false);
   history = [];
   historyStep = -1;
-  const raw = localStorage.getItem(getStorageKey());
+  const raw = loadBoardFromStorage(bb);
   if (raw) {
     restoreFromDataUrl(raw);
     history.push(raw);
@@ -237,6 +226,9 @@ function loadBoardDrawing(bb) {
   }
 }
 
+// =========================
+// БАЗОВЫЕ ИНСТРУМЕНТЫ РИСОВАНИЯ НА CANVAS
+// =========================
 function canvasPoint(evt) {
   const r = canvas.getBoundingClientRect();
   const scaleX = canvas.width / r.width;
@@ -301,6 +293,9 @@ function floodFill(startX0, startY0) {
   ctx.putImageData(img, 0, 0);
 }
 
+// =========================
+// ТЕКСТОВЫЙ РЕДАКТОР: СТИЛИ, КОММИТ, РЕНДЕР В CANVAS
+// =========================
 function setTextStyleButtonState() {
   paintBoldBtn.classList.toggle("active", textStyle.bold);
   paintItalicBtn.classList.toggle("active", textStyle.italic);
@@ -319,7 +314,8 @@ function updateEditorStyle() {
   target.style.fontSize = `${textEditor.dataset.fontSize}px`;
   target.style.color = textEditor.dataset.color;
   target.style.fontWeight = textEditor.dataset.bold === "1" ? "700" : "400";
-  target.style.fontStyle = textEditor.dataset.italic === "1" ? "italic" : "normal";
+  target.style.fontStyle =
+    textEditor.dataset.italic === "1" ? "italic" : "normal";
   const decorations = [
     textEditor.dataset.underline === "1" ? "underline" : "",
     textEditor.dataset.strike === "1" ? "line-through" : "",
@@ -334,13 +330,17 @@ function hasSelectedTextInEditor() {
   const selection = window.getSelection();
   if (!selection || selection.rangeCount === 0) return false;
   if (selection.isCollapsed) return false;
-  return textEditor.contains(selection.anchorNode) && textEditor.contains(selection.focusNode);
+  return (
+    textEditor.contains(selection.anchorNode) &&
+    textEditor.contains(selection.focusNode)
+  );
 }
 
 function applyInlineColorToSelection(color) {
   if (!textEditor) return false;
   const selection = window.getSelection();
-  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return false;
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed)
+    return false;
   const range = selection.getRangeAt(0);
   if (!textEditor.contains(range.commonAncestorContainer)) return false;
   const span = document.createElement("span");
@@ -414,7 +414,8 @@ function buildSerializedEditorHtml(target, cssW, cssH) {
   const sourceAll = [target, ...target.querySelectorAll("*")];
   all.forEach((el, idx) => {
     const src = sourceAll[idx];
-    if (!src || !(el instanceof HTMLElement) || !(src instanceof HTMLElement)) return;
+    if (!src || !(el instanceof HTMLElement) || !(src instanceof HTMLElement))
+      return;
     const cs = window.getComputedStyle(src);
     el.style.fontFamily = cs.fontFamily;
     el.style.fontSize = cs.fontSize;
@@ -466,8 +467,10 @@ function drawTextEditorToCanvas(editor) {
       .replace(/</g, "&lt;");
   const fontFamily = cs.fontFamily || editor.dataset.fontFamily;
   const fontSize = cs.fontSize || `${editor.dataset.fontSize}px`;
-  const fontWeight = cs.fontWeight || (editor.dataset.bold === "1" ? "700" : "400");
-  const fontStyle = cs.fontStyle || (editor.dataset.italic === "1" ? "italic" : "normal");
+  const fontWeight =
+    cs.fontWeight || (editor.dataset.bold === "1" ? "700" : "400");
+  const fontStyle =
+    cs.fontStyle || (editor.dataset.italic === "1" ? "italic" : "normal");
   const lineHeight =
     cs.lineHeight && cs.lineHeight !== "normal"
       ? cs.lineHeight
@@ -537,6 +540,9 @@ async function commitTextEditor() {
   }
 }
 
+// =========================
+// РАМКИ И ФИГУРЫ (ПРЯМОУГОЛЬНИК, КРУГ, SMART-ХЭНДЛЫ)
+// =========================
 function drawShapeEditorToCanvas() {
   if (!shapeEditor) return;
   const stageRect = paintStage.getBoundingClientRect();
@@ -549,12 +555,22 @@ function drawShapeEditorToCanvas() {
   const h = boxRect.height * scaleY;
   ctx.save();
   ctx.strokeStyle = shapeEditor.dataset.color || paintColor.value;
-  ctx.lineWidth = Number.parseFloat(shapeEditor.dataset.size || paintSize.value);
+  ctx.lineWidth = Number.parseFloat(
+    shapeEditor.dataset.size || paintSize.value,
+  );
   if (shapeEditor.dataset.tool === "rect") {
     ctx.strokeRect(x, y, w, h);
   } else if (shapeEditor.dataset.tool === "circle") {
     ctx.beginPath();
-    ctx.ellipse(x + w / 2, y + h / 2, Math.abs(w / 2), Math.abs(h / 2), 0, 0, Math.PI * 2);
+    ctx.ellipse(
+      x + w / 2,
+      y + h / 2,
+      Math.abs(w / 2),
+      Math.abs(h / 2),
+      0,
+      0,
+      Math.PI * 2,
+    );
     ctx.stroke();
   }
   ctx.restore();
@@ -682,6 +698,9 @@ function createShapeEditor(tool, x1, y1, x2, y2) {
   activeBoxEditor = box;
 }
 
+// =========================
+// ЖИЗНЕННЫЙ ЦИКЛ РИСОВАНИЯ (POINTER DOWN/MOVE/UP)
+// =========================
 function setCanvasCursor() {
   const cursorMap = {
     pen: "crosshair",
@@ -747,7 +766,11 @@ function moveDraw(evt) {
   ctx.putImageData(draftImageData, 0, 0);
   ctx.globalCompositeOperation = "source-over";
   ctx.beginPath();
-  if (activeTool === "text" || activeTool === "textbox" || activeTool === "smartbox") {
+  if (
+    activeTool === "text" ||
+    activeTool === "textbox" ||
+    activeTool === "smartbox"
+  ) {
     ctx.save();
     ctx.setLineDash([9, 6]);
     ctx.strokeStyle = paintColor.value;
@@ -781,7 +804,11 @@ function endDraw(evt) {
   isDrawing = false;
   ctx.globalCompositeOperation = "source-over";
   if (activeTool === "fill") return;
-  if (activeTool === "text" || activeTool === "textbox" || activeTool === "smartbox") {
+  if (
+    activeTool === "text" ||
+    activeTool === "textbox" ||
+    activeTool === "smartbox"
+  ) {
     const p = evt ? canvasPoint(evt) : { x: startX + 120, y: startY + 60 };
     if (draftImageData) ctx.putImageData(draftImageData, 0, 0);
     createTextEditor(
@@ -842,12 +869,15 @@ function openBoard(bb) {
   sidePanel.classList.remove("open");
 }
 
+// =========================
+// СОБЫТИЯ ИНТЕРФЕЙСА: ФОРМА, МЕНЮ, ТУЛБАР
+// =========================
 form.addEventListener("submit", (e) => {
   e.preventDefault();
   errorEl.textContent = "";
   const username = document.getElementById("user").value.trim();
   const password = document.getElementById("pass").value;
-  const session = authenticate(username, password);
+  const session = authenticateUser(username, password);
   if (!session) {
     errorEl.textContent = "Неверный логин или пароль.";
     return;
@@ -862,10 +892,13 @@ form.addEventListener("submit", (e) => {
   form.classList.add("hidden");
   page.classList.add("ignite");
   window.setTimeout(() => page.classList.add("opening"), IGNITE_BEFORE_OPEN_MS);
-  window.setTimeout(() => {
-    page.classList.add("gates-done");
-    realm.classList.add("visible");
-  }, IGNITE_BEFORE_OPEN_MS + GATE_MS + 120);
+  window.setTimeout(
+    () => {
+      page.classList.add("gates-done");
+      realm.classList.add("visible");
+    },
+    IGNITE_BEFORE_OPEN_MS + GATE_MS + 120,
+  );
 });
 
 burgerIcon.addEventListener("click", () => {
@@ -899,15 +932,20 @@ document.querySelector(".brigades-back-btn").addEventListener("click", () => {
   brigadesPage.classList.remove("open");
 });
 
-document.querySelector(".board-back-btn").addEventListener("click", async () => {
-  await removeTextEditor(true);
-  removeShapeEditor(true);
-  boardPage.classList.remove("open");
-  if (activeSession?.role === "supervisor") brigadesPage.classList.add("open");
-});
+document
+  .querySelector(".board-back-btn")
+  .addEventListener("click", async () => {
+    await removeTextEditor(true);
+    removeShapeEditor(true);
+    boardPage.classList.remove("open");
+    if (activeSession?.role === "supervisor")
+      brigadesPage.classList.add("open");
+  });
 
 paintToolbar.querySelectorAll("button[data-tool]").forEach((btnEl) => {
-  btnEl.addEventListener("click", async () => setActiveTool(btnEl.dataset.tool));
+  btnEl.addEventListener("click", async () =>
+    setActiveTool(btnEl.dataset.tool),
+  );
 });
 
 paintUndo.addEventListener("click", () => {
@@ -993,8 +1031,12 @@ function applyTextStyleToggle(styleKey, command) {
   updateEditorStyle();
 }
 
-paintBoldBtn.addEventListener("click", () => applyTextStyleToggle("bold", "bold"));
-paintItalicBtn.addEventListener("click", () => applyTextStyleToggle("italic", "italic"));
+paintBoldBtn.addEventListener("click", () =>
+  applyTextStyleToggle("bold", "bold"),
+);
+paintItalicBtn.addEventListener("click", () =>
+  applyTextStyleToggle("italic", "italic"),
+);
 paintUnderlineBtn.addEventListener("click", () =>
   applyTextStyleToggle("underline", "underline"),
 );
@@ -1002,12 +1044,17 @@ paintStrikeBtn.addEventListener("click", () =>
   applyTextStyleToggle("strike", "strikeThrough"),
 );
 
-[paintBoldBtn, paintItalicBtn, paintUnderlineBtn, paintStrikeBtn].forEach((el) => {
-  el.addEventListener("mousedown", (e) => {
-    if (textEditor) e.preventDefault();
-  });
-});
+[paintBoldBtn, paintItalicBtn, paintUnderlineBtn, paintStrikeBtn].forEach(
+  (el) => {
+    el.addEventListener("mousedown", (e) => {
+      if (textEditor) e.preventDefault();
+    });
+  },
+);
 
+// =========================
+// СОБЫТИЯ CANVAS И SMART-РАМОК
+// =========================
 canvas.addEventListener("pointerdown", startDraw);
 canvas.addEventListener("pointermove", moveDraw);
 canvas.addEventListener("pointerup", endDraw);
@@ -1015,11 +1062,19 @@ canvas.addEventListener("pointerleave", endDraw);
 
 paintStage.addEventListener("pointerdown", (e) => {
   if (!canEditBoard()) return;
-  const box = textEditor && textEditor.contains(e.target) ? textEditor : shapeEditor && shapeEditor.contains(e.target) ? shapeEditor : null;
+  const box =
+    textEditor && textEditor.contains(e.target)
+      ? textEditor
+      : shapeEditor && shapeEditor.contains(e.target)
+        ? shapeEditor
+        : null;
   if (!box) return;
   const target = e.target;
   if (!(target instanceof HTMLElement)) return;
-  if (!target.classList.contains("paint-smart-handle") && !target.classList.contains("paint-smart-move")) {
+  if (
+    !target.classList.contains("paint-smart-handle") &&
+    !target.classList.contains("paint-smart-move")
+  ) {
     return;
   }
   if (target.parentElement !== box) return;
@@ -1097,26 +1152,37 @@ window.addEventListener("pointerup", () => {
   activeBoxEditor = null;
 });
 
+// =========================
+// ГЛОБАЛЬНЫЕ СОБЫТИЯ (ВНЕШНИЕ КЛИКИ, ГОРЯЧИЕ КЛАВИШИ)
+// =========================
 document.addEventListener(
   "pointerdown",
   async (e) => {
-  if (!canEditBoard()) return;
-  if (paintToolbar.contains(e.target)) return;
-  if (textEditor && e.target !== textEditor && !textEditor.contains(e.target)) {
-    // Outside click commits current text box and must not start a new draw in same click.
-    e.preventDefault();
-    e.stopPropagation();
-    suppressNextCanvasDown = true;
-    await removeTextEditor(true);
-    return;
-  }
-  if (shapeEditor && e.target !== shapeEditor && !shapeEditor.contains(e.target)) {
-    e.preventDefault();
-    e.stopPropagation();
-    suppressNextCanvasDown = true;
-    removeShapeEditor(true);
-    return;
-  }
+    if (!canEditBoard()) return;
+    if (paintToolbar.contains(e.target)) return;
+    if (
+      textEditor &&
+      e.target !== textEditor &&
+      !textEditor.contains(e.target)
+    ) {
+      // Outside click commits current text box and must not start a new draw in same click.
+      e.preventDefault();
+      e.stopPropagation();
+      suppressNextCanvasDown = true;
+      await removeTextEditor(true);
+      return;
+    }
+    if (
+      shapeEditor &&
+      e.target !== shapeEditor &&
+      !shapeEditor.contains(e.target)
+    ) {
+      e.preventDefault();
+      e.stopPropagation();
+      suppressNextCanvasDown = true;
+      removeShapeEditor(true);
+      return;
+    }
   },
   true,
 );
@@ -1128,7 +1194,11 @@ window.addEventListener("keydown", (e) => {
     removeShapeEditor(false);
     return;
   }
-  if ((textEditor || shapeEditor) && (e.ctrlKey || e.metaKey) && e.key === "Enter") {
+  if (
+    (textEditor || shapeEditor) &&
+    (e.ctrlKey || e.metaKey) &&
+    e.key === "Enter"
+  ) {
     e.preventDefault();
     removeTextEditor(true);
     removeShapeEditor(true);
@@ -1136,12 +1206,19 @@ window.addEventListener("keydown", (e) => {
   }
   const ctrl = e.ctrlKey || e.metaKey;
   if (!ctrl) return;
-  if (e.code === "KeyZ" || e.key.toLowerCase() === "z" || e.key.toLowerCase() === "я") {
+  if (
+    e.code === "KeyZ" ||
+    e.key.toLowerCase() === "z" ||
+    e.key.toLowerCase() === "я"
+  ) {
     e.preventDefault();
     paintUndo.click();
   }
 });
 
+// =========================
+// ПАЛИТРА ЦВЕТОВ И СТАРТОВАЯ ИНИЦИАЛИЗАЦИЯ
+// =========================
 function renderPalette() {
   paintPalette.replaceChildren();
   PALETTE.forEach((hex) => {
