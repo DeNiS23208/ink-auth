@@ -732,10 +732,10 @@ async function startDraw(evt) {
   }
   await removeTextEditor(true);
   removeShapeEditor(true);
-  const p = canvasPoint(evt);
+  const pointer = canvasPoint(evt);
   isDrawing = true;
-  startX = p.x;
-  startY = p.y;
+  startX = pointer.x;
+  startY = pointer.y;
   draftImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
   applyStrokeStyle();
 
@@ -756,9 +756,9 @@ async function startDraw(evt) {
 
 function moveDraw(evt) {
   if (!isDrawing || !canEditBoard()) return;
-  const p = canvasPoint(evt);
+  const pointer = canvasPoint(evt);
   if (activeTool === "pen" || activeTool === "eraser") {
-    ctx.lineTo(p.x, p.y);
+    ctx.lineTo(pointer.x, pointer.y);
     ctx.stroke();
     return;
   }
@@ -775,23 +775,23 @@ function moveDraw(evt) {
     ctx.setLineDash([9, 6]);
     ctx.strokeStyle = paintColor.value;
     ctx.lineWidth = 1.5;
-    ctx.strokeRect(startX, startY, p.x - startX, p.y - startY);
+    ctx.strokeRect(startX, startY, pointer.x - startX, pointer.y - startY);
     ctx.restore();
     return;
   }
   if (activeTool === "line") {
     ctx.moveTo(startX, startY);
-    ctx.lineTo(p.x, p.y);
+    ctx.lineTo(pointer.x, pointer.y);
     ctx.stroke();
     return;
   }
   if (activeTool === "rect") {
-    ctx.strokeRect(startX, startY, p.x - startX, p.y - startY);
+    ctx.strokeRect(startX, startY, pointer.x - startX, pointer.y - startY);
     return;
   }
   if (activeTool === "circle") {
-    const rx = (p.x - startX) / 2;
-    const ry = (p.y - startY) / 2;
+    const rx = (pointer.x - startX) / 2;
+    const ry = (pointer.y - startY) / 2;
     const cx = startX + rx;
     const cy = startY + ry;
     ctx.ellipse(cx, cy, Math.abs(rx), Math.abs(ry), 0, 0, Math.PI * 2);
@@ -809,22 +809,22 @@ function endDraw(evt) {
     activeTool === "textbox" ||
     activeTool === "smartbox"
   ) {
-    const p = evt ? canvasPoint(evt) : { x: startX + 120, y: startY + 60 };
+    const pointer = evt ? canvasPoint(evt) : { x: startX + 120, y: startY + 60 };
     if (draftImageData) ctx.putImageData(draftImageData, 0, 0);
     createTextEditor(
       startX,
       startY,
-      p.x,
-      p.y,
+      pointer.x,
+      pointer.y,
       activeTool === "textbox" || activeTool === "smartbox",
       activeTool === "smartbox",
     );
     return;
   }
   if (activeTool === "rect" || activeTool === "circle") {
-    const p = evt ? canvasPoint(evt) : { x: startX + 100, y: startY + 80 };
+    const pointer = evt ? canvasPoint(evt) : { x: startX + 100, y: startY + 80 };
     if (draftImageData) ctx.putImageData(draftImageData, 0, 0);
-    createShapeEditor(activeTool, startX, startY, p.x, p.y);
+    createShapeEditor(activeTool, startX, startY, pointer.x, pointer.y);
     return;
   }
   pushHistory();
@@ -974,11 +974,11 @@ paintSave.addEventListener("click", async () => {
 paintExport.addEventListener("click", async () => {
   await removeTextEditor(true);
   removeShapeEditor(true);
-  const a = document.createElement("a");
+  const downloadLink = document.createElement("a");
   const bb = currentBb ?? "x";
-  a.href = canvas.toDataURL("image/png");
-  a.download = `bb-${bb}-board.png`;
-  a.click();
+  downloadLink.href = canvas.toDataURL("image/png");
+  downloadLink.download = `bb-${bb}-board.png`;
+  downloadLink.click();
 });
 
 paintFontFamily.addEventListener("change", () => {
@@ -1222,12 +1222,12 @@ window.addEventListener("keydown", (e) => {
 function renderPalette() {
   paintPalette.replaceChildren();
   PALETTE.forEach((hex) => {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.className = "paint-swatch";
-    b.style.background = hex;
-    b.title = hex;
-    b.addEventListener("click", () => {
+    const swatchButton = document.createElement("button");
+    swatchButton.type = "button";
+    swatchButton.className = "paint-swatch";
+    swatchButton.style.background = hex;
+    swatchButton.title = hex;
+    swatchButton.addEventListener("click", () => {
       paintColor.value = hex;
       syncColorControlPreview();
       if (textEditor) {
@@ -1235,7 +1235,7 @@ function renderPalette() {
         updateEditorStyle();
       }
     });
-    paintPalette.appendChild(b);
+    paintPalette.appendChild(swatchButton);
   });
 }
 
