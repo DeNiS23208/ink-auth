@@ -1,0 +1,1128 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fabric Pro Drawing App</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Roboto:wght@400;500&family=Open+Sans:wght@400;600&family=Montserrat:wght@400;600&family=Poppins:wght@400;600&family=Lato:wght@400;700&family=Nunito:wght@400;700&family=Merriweather:wght@400;700&family=Playfair+Display:wght@400;600&family=Ubuntu:wght@400;700&display=swap"
+    />
+    <style>
+      :root {
+        --toolbar-height: 108px;
+        --panel-width: 280px;
+        --bg: #f2f4f8;
+        --panel-bg: #141922;
+        --panel-border: #273244;
+        --panel-text: #e8edf7;
+        --control-bg: #1d2633;
+        --control-border: #334155;
+        --control-text: #e2e8f0;
+        --control-hover-bg: #273244;
+        --label-text: #d4dceb;
+        --hint-text: #96a3b8;
+        --layer-panel-bg: rgba(20, 25, 34, 0.96);
+        --layer-item-bg: #1a2230;
+        --layer-item-border: #334155;
+        --layer-item-active-bg: #eaf2ff;
+        --layer-item-active-text: #0f172a;
+      }
+
+      body.theme-light {
+        --panel-bg: #ffffff;
+        --panel-border: #d8dde7;
+        --panel-text: #1f2a37;
+        --control-bg: #ffffff;
+        --control-border: #cfd6e4;
+        --control-text: #1f2937;
+        --control-hover-bg: #eef2f7;
+        --label-text: #2d3645;
+        --hint-text: #5c6677;
+        --layer-panel-bg: rgba(255, 255, 255, 0.96);
+        --layer-item-bg: #ffffff;
+        --layer-item-border: #dbe2ee;
+        --layer-item-active-bg: #dbeafe;
+        --layer-item-active-text: #0f172a;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        font-family: Inter, Arial, sans-serif;
+        background: var(--bg);
+      }
+
+      .app {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .toolbar {
+        min-height: var(--toolbar-height);
+        padding: 10px 12px;
+        background: var(--panel-bg);
+        border-bottom: 1px solid var(--panel-border);
+        display: grid;
+        gap: 8px;
+        color: var(--panel-text);
+      }
+
+      .toolbar-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        overflow-y: hidden;
+        white-space: nowrap;
+        padding-bottom: 2px;
+      }
+
+      .toolbar-row > * {
+        flex: 0 0 auto;
+      }
+
+      button,
+      input,
+      select {
+        height: 34px;
+        border: 1px solid var(--control-border);
+        border-radius: 8px;
+        background: var(--control-bg);
+        color: var(--control-text);
+        padding: 0 10px;
+        cursor: pointer;
+      }
+
+      button:hover {
+        background: var(--control-hover-bg);
+      }
+
+      button.active {
+        border-color: #2563eb;
+        color: #1d4ed8;
+        background: #eaf2ff;
+      }
+
+      #theme-toggle {
+        min-width: 64px;
+        font-size: 18px;
+      }
+
+      .hint {
+        color: var(--hint-text);
+        font-size: 12px;
+      }
+
+      .label {
+        font-size: 13px;
+        color: var(--label-text);
+      }
+
+      .number-input {
+        width: 72px;
+      }
+
+      #brush-size {
+        width: 180px;
+      }
+
+      input[type="range"] {
+        padding: 0;
+      }
+
+      .board {
+        position: relative;
+        width: 100%;
+        height: calc(100% - var(--toolbar-height));
+      }
+
+      .canvas-wrap {
+        width: 100%;
+        height: 100%;
+      }
+
+      #drawing-canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+
+      .layers-panel {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        bottom: 12px;
+        width: var(--panel-width);
+        background: var(--layer-panel-bg);
+        border: 1px solid var(--panel-border);
+        border-radius: 10px;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        backdrop-filter: blur(2px);
+        color: var(--panel-text);
+      }
+
+      .layers-header {
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--panel-border);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .layers-list {
+        margin: 0;
+        padding: 10px;
+        list-style: none;
+        overflow: auto;
+        display: grid;
+        gap: 6px;
+      }
+
+      .layer-item {
+        border: 1px solid var(--layer-item-border);
+        border-radius: 8px;
+        padding: 8px;
+        display: grid;
+        gap: 6px;
+        font-size: 13px;
+        background: var(--layer-item-bg);
+      }
+
+      .layer-item.active {
+        border-color: #4f8bf9;
+        background: var(--layer-item-active-bg);
+        color: var(--layer-item-active-text);
+      }
+
+      .layer-item-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .layer-actions {
+        display: flex;
+        gap: 6px;
+      }
+
+      .layer-actions button {
+        height: 26px;
+        font-size: 12px;
+        padding: 0 8px;
+      }
+
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <div class="toolbar">
+        <div class="toolbar-row">
+          <button id="select-tool" class="active">Выбор (V)</button>
+          <button id="draw-tool">Кисть (B)</button>
+          <button id="eraser-tool">Ластик (E)</button>
+          <button id="line-tool">Линия (L)</button>
+          <button id="rect-tool">Прямоугольник (R)</button>
+          <button id="circle-tool">Круг (O)</button>
+          <button id="square-tool">Квадрат (Q)</button>
+          <button id="text-tool">Текст (T)</button>
+          <span class="label">Цвет</span>
+          <input id="color-picker" type="color" value="#111111" />
+          <span class="label">Размер</span>
+          <input id="brush-size" type="range" min="1" max="100" value="5" />
+          <span id="brush-size-label" class="label">5</span>
+          <button id="delete-selected">Удалить</button>
+          <button id="clear-canvas">Очистить всё</button>
+        </div>
+        <div class="toolbar-row">
+          <span class="label">Шрифт</span>
+          <select id="font-family">
+            <option value="Inter">Inter</option>
+            <option value="Arial">Arial</option>
+            <option value="Roboto">Roboto</option>
+            <option value="Open Sans">Open Sans</option>
+            <option value="Montserrat">Montserrat</option>
+            <option value="Poppins">Poppins</option>
+            <option value="Lato">Lato</option>
+            <option value="Nunito">Nunito</option>
+            <option value="Merriweather">Merriweather</option>
+            <option value="Playfair Display">Playfair Display</option>
+            <option value="Ubuntu">Ubuntu</option>
+            <option value="Georgia">Georgia</option>
+            <option value="Times New Roman">Times New Roman</option>
+            <option value="Verdana">Verdana</option>
+            <option value="Trebuchet MS">Trebuchet MS</option>
+            <option value="Courier New">Courier New</option>
+            <option value="Tahoma">Tahoma</option>
+          </select>
+          <span class="label">Цвет текста</span>
+          <input id="text-color-picker" type="color" value="#111111" />
+          <input id="text-size" class="number-input" type="number" min="8" max="200" value="28" />
+          <button id="text-bold" title="Жирный">B</button>
+          <button id="text-italic" title="Курсив">I</button>
+          <button id="text-underline" title="Подчеркнутый">U</button>
+          <button id="text-strike" title="Перечеркнутый">S</button>
+          <span class="label">Zoom</span>
+          <button id="zoom-out">-</button>
+          <button id="zoom-in">+</button>
+          <button id="zoom-reset">100%</button>
+          <span id="zoom-label" class="label">100%</span>
+          <button id="export-png">Экспорт PNG</button>
+          <button id="export-svg">Экспорт SVG</button>
+          <button id="export-json">Скачать JSON</button>
+          <button id="import-json">Загрузить JSON</button>
+          <input id="import-json-file" type="file" accept=".json" hidden />
+          <button id="theme-toggle" title="Переключить тему">☀️</button>
+          <span class="hint">Панорамирование: удерживай пробел + drag</span>
+        </div>
+      </div>
+
+      <div class="board">
+        <div class="canvas-wrap">
+          <canvas id="drawing-canvas"></canvas>
+        </div>
+
+        <aside class="layers-panel">
+          <div class="layers-header">
+            <strong>Слои</strong>
+            <button id="refresh-layers">Обновить</button>
+          </div>
+          <ul id="layers-list" class="layers-list"></ul>
+        </aside>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/fabric@5.3.0/dist/fabric.min.js"></script>
+    <script>
+      const canvas = new fabric.Canvas("drawing-canvas", {
+        backgroundColor: "#ffffff",
+        preserveObjectStacking: true
+      });
+
+      const canvasWrap = document.querySelector(".canvas-wrap");
+      const layersList = document.getElementById("layers-list");
+      const colorPicker = document.getElementById("color-picker");
+      const brushSize = document.getElementById("brush-size");
+      const brushSizeLabel = document.getElementById("brush-size-label");
+      const zoomLabel = document.getElementById("zoom-label");
+      const themeToggle = document.getElementById("theme-toggle");
+      const fontFamilySelect = document.getElementById("font-family");
+      const textColorPicker = document.getElementById("text-color-picker");
+      const textSizeInput = document.getElementById("text-size");
+      const textStyleButtons = {
+        bold: document.getElementById("text-bold"),
+        italic: document.getElementById("text-italic"),
+        underline: document.getElementById("text-underline"),
+        strike: document.getElementById("text-strike")
+      };
+
+      const tools = {
+        select: document.getElementById("select-tool"),
+        draw: document.getElementById("draw-tool"),
+        eraser: document.getElementById("eraser-tool"),
+        line: document.getElementById("line-tool"),
+        rect: document.getElementById("rect-tool"),
+        circle: document.getElementById("circle-tool"),
+        square: document.getElementById("square-tool"),
+        text: document.getElementById("text-tool")
+      };
+
+      const state = {
+        mode: "select",
+        currentShape: null,
+        startX: 0,
+        startY: 0,
+        drawingShape: false,
+        zoom: 1,
+        isPanning: false,
+        spacePressed: false,
+        history: [],
+        historyIndex: -1,
+        isHistoryBusy: false,
+        clipboard: null,
+        guideLines: []
+      };
+
+      function isDrawableObject(obj) {
+        return obj && !obj.excludeFromExport;
+      }
+
+      function getProjectJSON() {
+        const drawables = canvas.getObjects().filter((obj) => isDrawableObject(obj));
+        const data = drawables.map((obj) => obj.toObject(["name", "lockMovementX", "lockMovementY"]));
+        return JSON.stringify({
+          version: "fabric-pro-v1",
+          backgroundColor: "#ffffff",
+          objects: data
+        });
+      }
+
+      function saveHistorySnapshot() {
+        if (state.isHistoryBusy) return;
+        const snapshot = getProjectJSON();
+        if (state.history[state.historyIndex] === snapshot) return;
+
+        state.history = state.history.slice(0, state.historyIndex + 1);
+        state.history.push(snapshot);
+        state.historyIndex = state.history.length - 1;
+      }
+
+      function restoreFromSnapshot(snapshot) {
+        state.isHistoryBusy = true;
+        canvas.clear();
+        canvas.backgroundColor = "#ffffff";
+
+        const data = JSON.parse(snapshot);
+        fabric.util.enlivenObjects(data.objects, (objects) => {
+          objects.forEach((obj) => canvas.add(obj));
+          removeGridArtifacts();
+          canvas.renderAll();
+          updateLayersPanel();
+          state.isHistoryBusy = false;
+        });
+      }
+
+      function undo() {
+        if (state.historyIndex <= 0) return;
+        state.historyIndex -= 1;
+        restoreFromSnapshot(state.history[state.historyIndex]);
+      }
+
+      function redo() {
+        if (state.historyIndex >= state.history.length - 1) return;
+        state.historyIndex += 1;
+        restoreFromSnapshot(state.history[state.historyIndex]);
+      }
+
+      function downloadText(filename, text, type) {
+        const blob = new Blob([text], { type });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        link.click();
+        URL.revokeObjectURL(url);
+      }
+
+      function setZoom(value, centerPoint) {
+        state.zoom = Math.min(5, Math.max(0.2, value));
+        const point = centerPoint || new fabric.Point(canvas.getWidth() / 2, canvas.getHeight() / 2);
+        canvas.zoomToPoint(point, state.zoom);
+        zoomLabel.textContent = `${Math.round(state.zoom * 100)}%`;
+      }
+
+      function removeGridArtifacts() {
+        canvas.getObjects().forEach((obj) => {
+          const isLegacyGridLine =
+            obj &&
+            obj.type === "line" &&
+            obj.excludeFromExport === true &&
+            obj.selectable === false &&
+            obj.evented === false &&
+            !obj.isGuideLine;
+          if ((obj && obj.isGridLine) || isLegacyGridLine) {
+            canvas.remove(obj);
+          }
+        });
+      }
+
+      function clearGuides() {
+        state.guideLines.forEach((line) => canvas.remove(line));
+        state.guideLines = [];
+      }
+
+      function drawGuideLine(x1, y1, x2, y2) {
+        const line = new fabric.Line([x1, y1, x2, y2], {
+          stroke: "#22c55e",
+          strokeWidth: 1,
+          selectable: false,
+          evented: false,
+          excludeFromExport: true,
+          hoverCursor: "default",
+          isGuideLine: true
+        });
+        state.guideLines.push(line);
+        canvas.add(line);
+        line.bringToFront();
+      }
+
+      function applyTheme(theme) {
+        const normalizedTheme = theme === "light" ? "light" : "dark";
+        document.body.classList.toggle("theme-light", normalizedTheme === "light");
+        themeToggle.textContent = normalizedTheme === "light" ? "🌙" : "☀️";
+        themeToggle.title = normalizedTheme === "light" ? "Включить тёмную тему" : "Включить светлую тему";
+        localStorage.setItem("fabric-theme", normalizedTheme);
+      }
+
+      function resizeCanvas() {
+        const rect = canvasWrap.getBoundingClientRect();
+        canvas.setWidth(rect.width);
+        canvas.setHeight(rect.height);
+        removeGridArtifacts();
+        canvas.renderAll();
+      }
+
+      function getSelectedObjects() {
+        const active = canvas.getActiveObject();
+        if (!active) return [];
+        if (active.type === "activeSelection") return active.getObjects();
+        return [active];
+      }
+
+      function isTextObject(obj) {
+        return obj && (obj.type === "i-text" || obj.type === "text" || obj.type === "textbox");
+      }
+
+      function getActiveTextStyle(obj, key) {
+        if (!isTextObject(obj)) return null;
+        if (obj.isEditing && obj.selectionStart !== obj.selectionEnd) {
+          const styles = obj.getSelectionStyles(obj.selectionStart, obj.selectionEnd);
+          if (styles && styles.length && styles[0][key] != null) {
+            return styles[0][key];
+          }
+        }
+        return obj[key];
+      }
+
+      function updateTextSizeControl() {
+        const active = canvas.getActiveObject();
+        if (!isTextObject(active)) {
+          Object.values(textStyleButtons).forEach((btn) => btn.classList.remove("active"));
+          return;
+        }
+
+        const currentSize = getActiveTextStyle(active, "fontSize");
+        const currentFont = getActiveTextStyle(active, "fontFamily");
+        const currentFill = getActiveTextStyle(active, "fill");
+        const isBold = getActiveTextStyle(active, "fontWeight") === "bold";
+        const isItalic = getActiveTextStyle(active, "fontStyle") === "italic";
+        const isUnderline = Boolean(getActiveTextStyle(active, "underline"));
+        const isStrike = Boolean(getActiveTextStyle(active, "linethrough"));
+        if (currentSize) {
+          textSizeInput.value = Math.round(currentSize);
+        }
+        if (currentFont) {
+          fontFamilySelect.value = currentFont;
+        }
+        if (typeof currentFill === "string" && currentFill.startsWith("#")) {
+          textColorPicker.value = currentFill;
+        }
+        textStyleButtons.bold.classList.toggle("active", isBold);
+        textStyleButtons.italic.classList.toggle("active", isItalic);
+        textStyleButtons.underline.classList.toggle("active", isUnderline);
+        textStyleButtons.strike.classList.toggle("active", isStrike);
+      }
+
+      function applyTextStyle(styleObject) {
+        const active = canvas.getActiveObject();
+        if (!isTextObject(active)) return;
+
+        if (active.isEditing && active.selectionStart !== active.selectionEnd) {
+          active.setSelectionStyles(styleObject, active.selectionStart, active.selectionEnd);
+        } else {
+          active.set(styleObject);
+        }
+
+        canvas.requestRenderAll();
+        saveHistorySnapshot();
+        updateLayersPanel();
+        updateTextSizeControl();
+      }
+
+      function toggleTextStyle(styleName) {
+        const active = canvas.getActiveObject();
+        if (!isTextObject(active)) return;
+
+        if (styleName === "bold") {
+          const current = getActiveTextStyle(active, "fontWeight") === "bold";
+          applyTextStyle({ fontWeight: current ? "normal" : "bold" });
+          return;
+        }
+        if (styleName === "italic") {
+          const current = getActiveTextStyle(active, "fontStyle") === "italic";
+          applyTextStyle({ fontStyle: current ? "normal" : "italic" });
+          return;
+        }
+        if (styleName === "underline") {
+          const current = Boolean(getActiveTextStyle(active, "underline"));
+          applyTextStyle({ underline: !current });
+          return;
+        }
+        if (styleName === "strike") {
+          const current = Boolean(getActiveTextStyle(active, "linethrough"));
+          applyTextStyle({ linethrough: !current });
+        }
+      }
+
+      function copySelection() {
+        const active = canvas.getActiveObject();
+        if (!active) return;
+        active.clone((cloned) => {
+          state.clipboard = cloned;
+        });
+      }
+
+      function pasteSelection() {
+        if (!state.clipboard) return;
+        state.clipboard.clone((clonedObj) => {
+          canvas.discardActiveObject();
+          if (clonedObj.type === "activeSelection") {
+            clonedObj.canvas = canvas;
+            clonedObj.forEachObject((obj) => {
+              obj.set({ left: (obj.left || 0) + 20, top: (obj.top || 0) + 20 });
+              canvas.add(obj);
+            });
+            const newSel = new fabric.ActiveSelection(clonedObj.getObjects(), { canvas });
+            canvas.setActiveObject(newSel);
+          } else {
+            clonedObj.set({ left: (clonedObj.left || 0) + 20, top: (clonedObj.top || 0) + 20, evented: true });
+            canvas.add(clonedObj);
+            canvas.setActiveObject(clonedObj);
+          }
+          canvas.renderAll();
+          copySelection();
+          saveHistorySnapshot();
+          updateLayersPanel();
+        });
+      }
+
+      function updateLayersPanel() {
+        const objects = canvas.getObjects().filter((obj) => isDrawableObject(obj)).reverse();
+        layersList.innerHTML = "";
+
+        objects.forEach((obj) => {
+          const li = document.createElement("li");
+          li.className = "layer-item";
+          if (canvas.getActiveObject() === obj) {
+            li.classList.add("active");
+          }
+
+          const type = obj.type || "object";
+          const title = obj.name || `${type}`;
+
+          li.innerHTML = `
+            <div class="layer-item-head">
+              <span>${title}</span>
+              <span>${type}</span>
+            </div>
+            <div class="layer-actions">
+              <button data-act="select">Select</button>
+              <button data-act="up">Up</button>
+              <button data-act="down">Down</button>
+              <button data-act="toggle">${obj.visible === false ? "Show" : "Hide"}</button>
+              <button data-act="lock">${obj.lockMovementX ? "Unlock" : "Lock"}</button>
+            </div>
+          `;
+
+          li.addEventListener("click", (event) => {
+            const action = event.target.getAttribute("data-act");
+            if (!action) return;
+
+            if (action === "select") {
+              canvas.setActiveObject(obj);
+            } else if (action === "up") {
+              canvas.bringForward(obj);
+              saveHistorySnapshot();
+            } else if (action === "down") {
+              canvas.sendBackwards(obj);
+              saveHistorySnapshot();
+            } else if (action === "toggle") {
+              obj.visible = obj.visible === false;
+              saveHistorySnapshot();
+            } else if (action === "lock") {
+              const lock = !obj.lockMovementX;
+              obj.lockMovementX = lock;
+              obj.lockMovementY = lock;
+              obj.lockScalingX = lock;
+              obj.lockScalingY = lock;
+              obj.lockRotation = lock;
+              saveHistorySnapshot();
+            }
+
+            canvas.renderAll();
+            updateLayersPanel();
+          });
+
+          layersList.appendChild(li);
+        });
+      }
+
+      function setActiveButton(mode) {
+        Object.entries(tools).forEach(([key, btn]) => {
+          btn.classList.toggle("active", key === mode);
+        });
+      }
+
+      function setupBrush(color, size) {
+        canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
+        canvas.freeDrawingBrush.color = color;
+        canvas.freeDrawingBrush.width = Number(size);
+      }
+
+      function setMode(mode) {
+        state.mode = mode;
+        setActiveButton(mode);
+        canvas.isDrawingMode = mode === "draw" || mode === "eraser";
+        canvas.selection = mode === "select";
+
+        canvas.forEachObject((obj) => {
+          if (!isDrawableObject(obj)) return;
+          obj.selectable = mode === "select";
+          obj.evented = mode === "select";
+        });
+
+        if (mode === "draw") {
+          setupBrush(colorPicker.value, brushSize.value);
+        } else if (mode === "eraser") {
+          setupBrush("#ffffff", brushSize.value);
+        }
+      }
+
+      function addText() {
+        const textSize = Math.max(8, Math.min(200, Number(textSizeInput.value || 28)));
+        const text = new fabric.IText("Введите текст", {
+          left: 120,
+          top: 120,
+          fill: textColorPicker.value,
+          fontSize: textSize,
+          fontFamily: fontFamilySelect.value || "Inter",
+          name: "Text"
+        });
+        canvas.add(text);
+        canvas.setActiveObject(text);
+        canvas.renderAll();
+        saveHistorySnapshot();
+        updateLayersPanel();
+      }
+
+      function exportPNG() {
+        const data = canvas.toDataURL({
+          format: "png",
+          multiplier: 2,
+          withoutTransform: true
+        });
+        const link = document.createElement("a");
+        link.href = data;
+        link.download = "fabric-pro.png";
+        link.click();
+      }
+
+      function exportSVG() {
+        const svg = canvas.toSVG();
+        downloadText("fabric-pro.svg", svg, "image/svg+xml");
+      }
+
+      function exportJSON() {
+        downloadText("fabric-pro.json", getProjectJSON(), "application/json");
+      }
+
+      function importJSON(file) {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          try {
+            const data = JSON.parse(event.target.result);
+            const snapshot = JSON.stringify(data);
+            restoreFromSnapshot(snapshot);
+            state.history = [snapshot];
+            state.historyIndex = 0;
+          } catch (error) {
+            alert("Не удалось загрузить JSON: " + error.message);
+          }
+        };
+        reader.readAsText(file);
+      }
+
+      tools.select.addEventListener("click", () => setMode("select"));
+      tools.draw.addEventListener("click", () => setMode("draw"));
+      tools.eraser.addEventListener("click", () => setMode("eraser"));
+      tools.line.addEventListener("click", () => setMode("line"));
+      tools.rect.addEventListener("click", () => setMode("rect"));
+      tools.circle.addEventListener("click", () => setMode("circle"));
+      tools.square.addEventListener("click", () => setMode("square"));
+      tools.text.addEventListener("click", () => {
+        setMode("select");
+        addText();
+      });
+
+      colorPicker.addEventListener("input", () => {
+        if (state.mode === "draw") {
+          setupBrush(colorPicker.value, brushSize.value);
+        }
+        const active = canvas.getActiveObject();
+        if (active && isDrawableObject(active)) {
+          if (!isTextObject(active)) {
+            active.set({ stroke: colorPicker.value, fill: active.fill === "transparent" ? "transparent" : colorPicker.value });
+            canvas.renderAll();
+            saveHistorySnapshot();
+          }
+        }
+      });
+
+      textColorPicker.addEventListener("input", () => {
+        const active = canvas.getActiveObject();
+        if (!isTextObject(active)) return;
+        applyTextStyle({ fill: textColorPicker.value });
+      });
+
+      brushSize.addEventListener("input", () => {
+        brushSizeLabel.textContent = brushSize.value;
+        if (state.mode === "draw" || state.mode === "eraser") {
+          setupBrush(state.mode === "eraser" ? "#ffffff" : colorPicker.value, brushSize.value);
+        }
+      });
+
+      textSizeInput.addEventListener("change", () => {
+        const active = canvas.getActiveObject();
+        if (!isTextObject(active)) return;
+        const size = Math.max(8, Math.min(200, Number(textSizeInput.value || 28)));
+        applyTextStyle({ fontSize: size });
+      });
+
+      fontFamilySelect.addEventListener("change", () => {
+        const active = canvas.getActiveObject();
+        if (!isTextObject(active)) return;
+        applyTextStyle({ fontFamily: fontFamilySelect.value });
+      });
+      textStyleButtons.bold.addEventListener("click", () => toggleTextStyle("bold"));
+      textStyleButtons.italic.addEventListener("click", () => toggleTextStyle("italic"));
+      textStyleButtons.underline.addEventListener("click", () => toggleTextStyle("underline"));
+      textStyleButtons.strike.addEventListener("click", () => toggleTextStyle("strike"));
+
+      document.getElementById("zoom-in").addEventListener("click", () => setZoom(state.zoom + 0.1));
+      document.getElementById("zoom-out").addEventListener("click", () => setZoom(state.zoom - 0.1));
+      document.getElementById("zoom-reset").addEventListener("click", () => {
+        canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+        setZoom(1);
+      });
+      document.getElementById("export-png").addEventListener("click", exportPNG);
+      document.getElementById("export-svg").addEventListener("click", exportSVG);
+      document.getElementById("export-json").addEventListener("click", exportJSON);
+      document.getElementById("refresh-layers").addEventListener("click", updateLayersPanel);
+      document.getElementById("import-json").addEventListener("click", () => {
+        document.getElementById("import-json-file").click();
+      });
+      document.getElementById("import-json-file").addEventListener("change", (event) => {
+        importJSON(event.target.files[0]);
+        event.target.value = "";
+      });
+      themeToggle.addEventListener("click", () => {
+        const isLight = document.body.classList.contains("theme-light");
+        applyTheme(isLight ? "dark" : "light");
+      });
+
+      document.getElementById("delete-selected").addEventListener("click", () => {
+        const active = canvas.getActiveObjects();
+        if (!active.length) return;
+        active.forEach((obj) => canvas.remove(obj));
+        canvas.discardActiveObject();
+        canvas.renderAll();
+        saveHistorySnapshot();
+        updateLayersPanel();
+      });
+
+      document.getElementById("clear-canvas").addEventListener("click", () => {
+        canvas.getObjects().filter((obj) => isDrawableObject(obj)).forEach((obj) => canvas.remove(obj));
+        canvas.backgroundColor = "#ffffff";
+        removeGridArtifacts();
+        canvas.renderAll();
+        saveHistorySnapshot();
+        updateLayersPanel();
+      });
+
+      canvas.on("mouse:wheel", (opt) => {
+        const delta = opt.e.deltaY;
+        let nextZoom = state.zoom * Math.pow(0.999, delta);
+        nextZoom = Math.min(5, Math.max(0.2, nextZoom));
+        setZoom(nextZoom, new fabric.Point(opt.e.offsetX, opt.e.offsetY));
+        opt.e.preventDefault();
+        opt.e.stopPropagation();
+      });
+
+      canvas.on("mouse:down", (opt) => {
+        if (state.spacePressed) {
+          state.isPanning = true;
+          canvas.selection = false;
+          return;
+        }
+
+        if (!["line", "rect", "circle", "square"].includes(state.mode)) return;
+        const pointer = canvas.getPointer(opt.e);
+        state.startX = pointer.x;
+        state.startY = pointer.y;
+        state.drawingShape = true;
+
+        if (state.mode === "line") {
+          state.currentShape = new fabric.Line([state.startX, state.startY, state.startX, state.startY], {
+            stroke: colorPicker.value,
+            strokeWidth: Number(brushSize.value),
+            selectable: false,
+            evented: false,
+            name: "Line"
+          });
+        } else if (state.mode === "rect") {
+          state.currentShape = new fabric.Rect({
+            left: state.startX,
+            top: state.startY,
+            width: 0,
+            height: 0,
+            fill: "transparent",
+            stroke: colorPicker.value,
+            strokeWidth: Number(brushSize.value),
+            selectable: false,
+            evented: false,
+            name: "Rect"
+          });
+        } else if (state.mode === "circle") {
+          state.currentShape = new fabric.Ellipse({
+            left: state.startX,
+            top: state.startY,
+            rx: 0,
+            ry: 0,
+            fill: "transparent",
+            stroke: colorPicker.value,
+            strokeWidth: Number(brushSize.value),
+            selectable: false,
+            evented: false,
+            name: "Ellipse"
+          });
+        } else if (state.mode === "square") {
+          state.currentShape = new fabric.Rect({
+            left: state.startX,
+            top: state.startY,
+            width: 0,
+            height: 0,
+            fill: "transparent",
+            stroke: colorPicker.value,
+            strokeWidth: Number(brushSize.value),
+            selectable: false,
+            evented: false,
+            name: "Square"
+          });
+        }
+
+        canvas.add(state.currentShape);
+      });
+
+      canvas.on("mouse:move", (opt) => {
+        if (state.isPanning) {
+          const delta = new fabric.Point(opt.e.movementX, opt.e.movementY);
+          canvas.relativePan(delta);
+          return;
+        }
+
+        if (!state.drawingShape || !state.currentShape) return;
+        const pointer = canvas.getPointer(opt.e);
+        const w = pointer.x - state.startX;
+        const h = pointer.y - state.startY;
+
+        if (state.mode === "line") {
+          state.currentShape.set({ x2: pointer.x, y2: pointer.y });
+        } else if (state.mode === "rect") {
+          state.currentShape.set({
+            left: w < 0 ? pointer.x : state.startX,
+            top: h < 0 ? pointer.y : state.startY,
+            width: Math.abs(w),
+            height: Math.abs(h)
+          });
+        } else if (state.mode === "circle") {
+          state.currentShape.set({
+            left: w < 0 ? pointer.x : state.startX,
+            top: h < 0 ? pointer.y : state.startY,
+            rx: Math.abs(w) / 2,
+            ry: Math.abs(h) / 2
+          });
+        } else if (state.mode === "square") {
+          const side = Math.max(Math.abs(w), Math.abs(h));
+          state.currentShape.set({
+            left: w < 0 ? state.startX - side : state.startX,
+            top: h < 0 ? state.startY - side : state.startY,
+            width: side,
+            height: side
+          });
+        }
+
+        canvas.renderAll();
+      });
+
+      canvas.on("mouse:up", () => {
+        if (state.isPanning) {
+          state.isPanning = false;
+          canvas.selection = state.mode === "select";
+          clearGuides();
+          return;
+        }
+
+        if (!state.currentShape) {
+          clearGuides();
+          return;
+        }
+        state.currentShape.set({ selectable: true, evented: true });
+        state.currentShape = null;
+        state.drawingShape = false;
+        if (["line", "rect", "circle", "square"].includes(state.mode)) {
+          setMode("select");
+        }
+        clearGuides();
+        saveHistorySnapshot();
+        updateLayersPanel();
+      });
+
+      canvas.on("path:created", () => {
+        saveHistorySnapshot();
+        updateLayersPanel();
+      });
+      canvas.on("object:added", () => {
+        updateLayersPanel();
+        updateTextSizeControl();
+      });
+      canvas.on("object:modified", () => {
+        saveHistorySnapshot();
+        updateLayersPanel();
+        updateTextSizeControl();
+      });
+      canvas.on("object:removed", () => {
+        updateLayersPanel();
+        updateTextSizeControl();
+      });
+      canvas.on("selection:created", () => {
+        updateLayersPanel();
+        updateTextSizeControl();
+      });
+      canvas.on("selection:updated", () => {
+        updateLayersPanel();
+        updateTextSizeControl();
+      });
+      canvas.on("selection:cleared", () => {
+        updateLayersPanel();
+        updateTextSizeControl();
+      });
+      canvas.on("text:selection:changed", updateTextSizeControl);
+      canvas.on("text:editing:entered", updateTextSizeControl);
+      canvas.on("text:changed", updateTextSizeControl);
+
+      canvas.on("object:moving", (event) => {
+        const obj = event.target;
+        if (!obj || !isDrawableObject(obj)) return;
+        clearGuides();
+
+        const threshold = 6;
+        const movingBounds = obj.getBoundingRect();
+        const movingCX = movingBounds.left + movingBounds.width / 2;
+        const movingCY = movingBounds.top + movingBounds.height / 2;
+
+        canvas.getObjects().forEach((other) => {
+          if (other === obj || !isDrawableObject(other)) return;
+          const b = other.getBoundingRect();
+          const xPoints = [b.left, b.left + b.width / 2, b.left + b.width];
+          const yPoints = [b.top, b.top + b.height / 2, b.top + b.height];
+          xPoints.forEach((x) => {
+            if (Math.abs(movingCX - x) <= threshold) {
+              obj.set("left", (obj.left || 0) + (x - movingCX));
+              drawGuideLine(x, 0, x, canvas.getHeight());
+            }
+          });
+          yPoints.forEach((y) => {
+            if (Math.abs(movingCY - y) <= threshold) {
+              obj.set("top", (obj.top || 0) + (y - movingCY));
+              drawGuideLine(0, y, canvas.getWidth(), y);
+            }
+          });
+        });
+      });
+
+      function isTypingTarget(target) {
+        if (!target) return false;
+        const tag = target.tagName;
+        return tag === "INPUT" || tag === "TEXTAREA" || target.isContentEditable;
+      }
+
+      document.addEventListener("keydown", (event) => {
+        const typingNow = isTypingTarget(event.target);
+
+        if (event.code === "Space") {
+          if (typingNow) return;
+          state.spacePressed = true;
+          canvas.defaultCursor = "grab";
+        }
+
+        if (event.ctrlKey || event.metaKey) {
+          const activeText = canvas.getActiveObject();
+          if (isTextObject(activeText) && (event.code === "KeyB" || event.code === "KeyI" || event.code === "KeyU")) {
+            event.preventDefault();
+            if (event.code === "KeyB") toggleTextStyle("bold");
+            if (event.code === "KeyI") toggleTextStyle("italic");
+            if (event.code === "KeyU") toggleTextStyle("underline");
+            return;
+          }
+          if (typingNow) return;
+          if (event.code === "KeyC") {
+            event.preventDefault();
+            copySelection();
+          }
+          if (event.code === "KeyV") {
+            event.preventDefault();
+            pasteSelection();
+          }
+          return;
+        }
+
+        if (typingNow) return;
+
+        if (event.key === "Delete" || event.key === "Backspace") {
+          const active = canvas.getActiveObjects();
+          if (active.length) {
+            active.forEach((obj) => canvas.remove(obj));
+            canvas.discardActiveObject();
+            canvas.renderAll();
+            saveHistorySnapshot();
+            updateLayersPanel();
+          }
+        }
+
+        if (event.code === "KeyV") setMode("select");
+        if (event.code === "KeyB") setMode("draw");
+        if (event.code === "KeyE") setMode("eraser");
+        if (event.code === "KeyL") setMode("line");
+        if (event.code === "KeyR") setMode("rect");
+        if (event.code === "KeyO") setMode("circle");
+        if (event.code === "KeyQ") setMode("square");
+        if (event.code === "KeyT") {
+          setMode("select");
+          addText();
+        }
+      });
+
+      document.addEventListener("keyup", (event) => {
+        if (event.code === "Space") {
+          state.spacePressed = false;
+          state.isPanning = false;
+          canvas.defaultCursor = "default";
+        }
+      });
+
+      window.addEventListener("resize", resizeCanvas);
+
+      const savedTheme = localStorage.getItem("fabric-theme");
+      applyTheme(savedTheme || "dark");
+      resizeCanvas();
+      setMode("select");
+      saveHistorySnapshot();
+      updateLayersPanel();
+      updateTextSizeControl();
+    </script>
+  </body>
+</html>
