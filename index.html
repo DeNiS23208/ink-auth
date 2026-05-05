@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600&family=Source+Sans+3:wght@400;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Bad+Script&family=Caveat:wght@400;700&family=Cinzel:wght@500;600&family=Kalam:wght@400;700&family=Marck+Script&family=Neucha&family=Patrick+Hand&family=Source+Sans+3:wght@400;600&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="styles/main.css" />
@@ -23,9 +23,9 @@
       </div>
       <div class="side-panel">
         <ul>
-          <li>Главная</li>
-          <li>Буровые бригады</li>
-          <li>Контакты</li>
+          <li data-nav="home">Главная</li>
+          <li data-nav="boards">Буровые бригады</li>
+          <li data-nav="contacts">Контакты</li>
         </ul>
       </div>
       <div class="realm" id="realm" aria-live="polite">
@@ -33,34 +33,75 @@
         <h1>Гуляев Денис Михайлович</h1>
       </div>
       <div class="brigades-page">
-        <button class="back-btn">← Назад</button>
+        <button type="button" class="back-btn brigades-back-btn">← Назад</button>
         <h2>Выберите буровую бригаду</h2>
         <div class="brigades-grid">
           <!-- Генерируем 30 кубиков -->
         </div>
       </div>
-      <div class="board-page">
-        <button class="back-btn">← Назад</button>
-        <h2 id="board-title">Доска бригады</h2>
-        <div class="board">
-          <div class="column">
-            <h3>План</h3>
-            <div class="cards" id="plan-cards">
-              <div class="card">Задача 1</div>
-              <div class="card">Задача 2</div>
+      <div class="board-page" id="board-page">
+        <button type="button" class="back-btn board-back-btn wb-wall-btn">← Назад</button>
+        <div class="wb-room" aria-hidden="true"></div>
+        <div class="wb-board">
+          <div class="whiteboard-wrap paint-sheet">
+            <p class="wb-readonly-banner" id="wb-readonly-banner" hidden>
+              Просмотр начальника: редактировать может только мастер этой бригады.
+            </p>
+            <h2 class="paint-title" id="board-title">Оперативная доска — ББ</h2>
+            <div class="paint-toolbar" id="paint-toolbar">
+              <button type="button" data-tool="pen">Кисть</button>
+              <button type="button" data-tool="eraser">Ластик</button>
+              <button type="button" data-tool="line">Линия</button>
+              <button type="button" data-tool="rect">Прямоугольник</button>
+              <button type="button" data-tool="circle">Круг</button>
+              <button type="button" data-tool="fill">Заливка</button>
+              <button type="button" data-tool="text">Текст</button>
+              <button type="button" data-tool="textbox">Текст + рамка</button>
+              <button type="button" data-tool="smartbox">Умная рамка</button>
+              <label>Цвет <input type="color" id="paint-color" value="#0d47a1" /></label>
+              <label>Толщина <input type="range" id="paint-size" min="1" max="24" value="3" /></label>
+              <label
+                >Шрифт
+                <select id="paint-font-family">
+                  <option value="Kalam">Kalam</option>
+                  <option value="Caveat">Caveat</option>
+                  <option value="Patrick Hand">Patrick Hand</option>
+                  <option value="Neucha">Neucha</option>
+                  <option value="Bad Script">Bad Script</option>
+                  <option value="Marck Script">Marck Script</option>
+                  <option value="Arial">Arial</option>
+                  <option value="Verdana">Verdana</option>
+                  <option value="Tahoma">Tahoma</option>
+                  <option value="Trebuchet MS">Trebuchet MS</option>
+                  <option value="Georgia">Georgia</option>
+                  <option value="Times New Roman">Times</option>
+                  <option value="Courier New">Courier</option>
+                  <option value="'Comic Sans MS'">Comic Sans</option>
+                  <option value="Segoe UI">Segoe UI</option>
+                  <option value="Roboto">Roboto</option>
+                  <option value="Montserrat">Montserrat</option>
+                  <option value="PT Sans">PT Sans</option>
+                  <option value="Impact">Impact</option>
+                </select>
+              </label>
+              <label>Размер текста <input type="range" id="paint-font-size" min="12" max="96" value="28" /></label>
+              <div class="paint-text-controls" id="paint-text-controls">
+                <button type="button" id="paint-bold">Жирный</button>
+                <button type="button" id="paint-italic">Курсив</button>
+                <button type="button" id="paint-underline">Подчерк.</button>
+                <button type="button" id="paint-strike">Зачерк.</button>
+              </div>
+              <div class="paint-palette" id="paint-palette"></div>
+              <button type="button" id="paint-undo">Отменить</button>
+              <button type="button" id="paint-clear">Очистить</button>
+              <button type="button" id="paint-save">Сохранить</button>
+              <button type="button" id="paint-export">Скачать PNG</button>
             </div>
-          </div>
-          <div class="column">
-            <h3>В работе</h3>
-            <div class="cards" id="work-cards">
-              <div class="card">Задача 3</div>
+            <div class="paint-stage">
+              <div class="paint-board-bg"></div>
+              <canvas id="paint-canvas" width="1600" height="900"></canvas>
             </div>
-          </div>
-          <div class="column">
-            <h3>Готово</h3>
-            <div class="cards" id="done-cards">
-              <div class="card">Задача 4</div>
-            </div>
+            <p class="wb-hint" id="wb-save-hint" aria-live="polite"></p>
           </div>
         </div>
       </div>
@@ -106,11 +147,14 @@
         <p class="error" id="error" role="alert"></p>
         <button class="btn" type="submit" id="submit">Открыть</button>
         <p class="hint">
-          Для проверки: логин <code>ink</code>, пароль <code>ink</code>.
-          Замените проверку в скрипте на свой API.
+          <strong>Начальник</strong>: <code>boss</code> / <code>boss</code>
+          или <code>ink</code> / <code>ink</code> — просмотр всех досок ББ.<br />
+          <strong>Мастер ББ</strong>: логин <code>m1</code>…<code>m30</code>, пароль тот же номер (<code>1</code>…<code>30</code>)
+          — своя оперативка только по своей бригаде.
         </p>
       </form>
     </div>
-    <script type="module" src="scripts/main.js"></script>
+    <script defer src="scripts/utils.js"></script>
+    <script defer src="scripts/main.js"></script>
   </body>
 </html>
