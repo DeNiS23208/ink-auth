@@ -81,15 +81,24 @@
         display: flex;
         align-items: center;
         gap: 8px;
-        flex-wrap: nowrap;
-        overflow-x: auto;
-        overflow-y: hidden;
-        white-space: nowrap;
+        flex-wrap: wrap;
+        overflow: visible;
+        white-space: normal;
         padding-bottom: 2px;
       }
 
       .toolbar-row > * {
         flex: 0 0 auto;
+      }
+
+      .toolbar-spacer {
+        flex: 1 1 auto !important;
+      }
+
+      #action-bookmark,
+      #action-exit,
+      #action-fullscreen {
+        min-width: 170px;
       }
 
       button,
@@ -145,6 +154,36 @@
         position: relative;
         width: 100%;
         height: calc(100% - var(--toolbar-height));
+      }
+
+      .floating-fullscreen-exit {
+        position: fixed;
+        top: 14px;
+        left: 14px;
+        z-index: 9999;
+        background: rgba(17, 24, 39, 0.9);
+        color: #f8fafc;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        border-radius: 8px;
+        height: 36px;
+        padding: 0 12px;
+        cursor: pointer;
+      }
+
+      .floating-fullscreen-exit[hidden] {
+        display: none !important;
+      }
+
+      body.is-fullscreen .toolbar {
+        display: none;
+      }
+
+      body.is-fullscreen .layers-panel {
+        display: none !important;
+      }
+
+      body.is-fullscreen .board {
+        height: 100%;
       }
 
       .canvas-wrap {
@@ -244,6 +283,7 @@
           <span class="label">Размер</span>
           <input id="brush-size" type="range" min="1" max="100" value="5" />
           <span id="brush-size-label" class="label">5</span>
+          <button id="undo-action">Отменить</button>
           <button id="delete-selected">Удалить</button>
           <button id="clear-canvas">Очистить всё</button>
         </div>
@@ -286,11 +326,19 @@
           <button id="import-json">Загрузить JSON</button>
           <input id="import-json-file" type="file" accept=".json" hidden />
           <button id="theme-toggle" title="Переключить тему">☀️</button>
+          <button id="toggle-layers">Скрыть слои</button>
+          <span class="toolbar-spacer"></span>
+          <button id="action-bookmark">☆ Добавить в закладки</button>
+          <button id="action-exit">💾 Сохранить и выйти</button>
+          <button id="action-fullscreen">⛶ Полный экран</button>
           <span class="hint">Панорамирование: удерживай пробел + drag</span>
         </div>
       </div>
 
       <div class="board">
+        <button id="floating-fullscreen-exit" class="floating-fullscreen-exit" hidden>
+          ← Обычный режим
+        </button>
         <div class="canvas-wrap">
           <canvas id="drawing-canvas"></canvas>
         </div>
@@ -307,13 +355,30 @@
 
     <script src="https://cdn.jsdelivr.net/npm/fabric@5.3.0/dist/fabric.min.js"></script>
     <script>
+      const query = new URLSearchParams(window.location.search);
+      const boardBb = query.get("bb") || "0";
+      const boardId = query.get("board") || "board-1";
+      const isReadOnly = query.get("readonly") === "1";
+      const boardStorageKey = `ink-auth-fabric-bb-${boardBb}-${boardId}`;
+      const boardThumbKey = `ink-auth-fabric-thumb-bb-${boardBb}-${boardId}`;
+      const boardPreviewKey = `ink-auth-fabric-preview-bb-${boardBb}-${boardId}`;
+      const PREVIEW_EXPORT_MULTIPLIER = 6;
+
       const canvas = new fabric.Canvas("drawing-canvas", {
         backgroundColor: "#ffffff",
-        preserveObjectStacking: true
+        preserveObjectStacking: true,
+        fireRightClick: true,
+        stopContextMenu: true
       });
 
       const canvasWrap = document.querySelector(".canvas-wrap");
       const layersList = document.getElementById("layers-list");
+      const layersPanel = document.querySelector(".layers-panel");
+      const toggleLayersBtn = document.getElementById("toggle-layers");
+      const floatingFullscreenExitBtn = document.getElementById("floating-fullscreen-exit");
+      const actionBookmarkBtn = document.getElementById("action-bookmark");
+      const actionExitBtn = document.getElementById("action-exit");
+      const actionFullscreenBtn = document.getElementById("action-fullscreen");
       const colorPicker = document.getElementById("color-picker");
       const brushSize = document.getElementById("brush-size");
       const brushSizeLabel = document.getElementById("brush-size-label");
@@ -348,13 +413,242 @@
         drawingShape: false,
         zoom: 1,
         isPanning: false,
+        isRightPanning: false,
+        lastPanX: 0,
+        lastPanY: 0,
         spacePressed: false,
         history: [],
         historyIndex: -1,
         isHistoryBusy: false,
         clipboard: null,
-        guideLines: []
+        guideLines: [],
+        saveCropMode: false,
+        saveCropRect: null,
+        cropStartX: 0,
+        cropStartY: 0,
+        cropStartScreenX: 0,
+        cropStartScreenY: 0,
+        cropEndScreenX: 0,
+        cropEndScreenY: 0,
+        pendingCropResolve: null
       };
+
+      function setLayersVisible(visible) {
+        if (!layersPanel || !toggleLayersBtn) return;
+        layersPanel.style.display = visible ? "" : "none";
+        toggleLayersBtn.textContent = visible ? "Скрыть слои" : "Показывать слои";
+      }
+
+      function toggleFullscreenMode() {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen?.();
+          return;
+        }
+        document.exitFullscreen?.();
+      }
+
+      function syncFullscreenLabel() {
+        if (!actionFullscreenBtn) return;
+        actionFullscreenBtn.textContent = document.fullscreenElement
+          ? "🗗 Обычный экран"
+          : "⛶ Полный экран";
+        const isFullscreen = Boolean(document.fullscreenElement);
+        document.body.classList.toggle("is-fullscreen", isFullscreen);
+        if (floatingFullscreenExitBtn) {
+          floatingFullscreenExitBtn.hidden = !isFullscreen;
+        }
+      }
+
+      // Единый аккуратный стиль контролов Fabric (рамка/хэндлы/поворот)
+      fabric.Object.prototype.transparentCorners = false;
+      fabric.Object.prototype.cornerStyle = "circle";
+      fabric.Object.prototype.cornerColor = "#ffffff";
+      fabric.Object.prototype.cornerStrokeColor = "#2563eb";
+      fabric.Object.prototype.cornerSize = 10;
+      fabric.Object.prototype.borderColor = "#2563eb";
+      fabric.Object.prototype.borderDashArray = [5, 4];
+      fabric.Object.prototype.borderScaleFactor = 1.3;
+      fabric.Object.prototype.padding = 5;
+      fabric.Object.prototype.rotatingPointOffset = 22;
+
+      const baseControls = fabric.Object.prototype.controls;
+
+      function drawControlCircle(ctx, left, top, radius, fill, stroke) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(left, top, radius, 0, Math.PI * 2);
+        ctx.fillStyle = fill;
+        ctx.fill();
+        if (stroke) {
+          ctx.lineWidth = 1.5;
+          ctx.strokeStyle = stroke;
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      function makeArrowRenderer(glyph) {
+        return function renderArrow(ctx, left, top) {
+          drawControlCircle(ctx, left, top, 9, "#ffffff", "#2563eb");
+          ctx.save();
+          ctx.fillStyle = "#1d4ed8";
+          ctx.font = "bold 12px Inter, Arial, sans-serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(glyph, left, top + 0.5);
+          ctx.restore();
+        };
+      }
+
+      function renderRotateIcon(ctx, left, top) {
+        drawControlCircle(ctx, left, top, 10, "#ffffff", "#0f766e");
+        ctx.save();
+        ctx.fillStyle = "#0f766e";
+        ctx.font = "bold 12px Inter, Arial, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("↻", left, top + 0.5);
+        ctx.restore();
+      }
+
+      function renderMoveDot(ctx, left, top) {
+        drawControlCircle(ctx, left, top, 6, "#111827", "#f8fafc");
+      }
+
+      function getCustomControls() {
+        return {
+          tl: new fabric.Control({
+            x: -0.5,
+            y: -0.5,
+            offsetX: -10,
+            offsetY: -10,
+            cursorStyle: "nwse-resize",
+            actionHandler: baseControls.tl.actionHandler,
+            getActionName: baseControls.tl.getActionName,
+            render: makeArrowRenderer("↖")
+          }),
+          tr: new fabric.Control({
+            x: 0.5,
+            y: -0.5,
+            offsetX: 10,
+            offsetY: -10,
+            cursorStyle: "nesw-resize",
+            actionHandler: baseControls.tr.actionHandler,
+            getActionName: baseControls.tr.getActionName,
+            render: makeArrowRenderer("↗")
+          }),
+          bl: new fabric.Control({
+            x: -0.5,
+            y: 0.5,
+            offsetX: -10,
+            offsetY: 10,
+            cursorStyle: "nesw-resize",
+            actionHandler: baseControls.bl.actionHandler,
+            getActionName: baseControls.bl.getActionName,
+            render: makeArrowRenderer("↙")
+          }),
+          br: new fabric.Control({
+            x: 0.5,
+            y: 0.5,
+            offsetX: 10,
+            offsetY: 10,
+            cursorStyle: "nwse-resize",
+            actionHandler: baseControls.br.actionHandler,
+            getActionName: baseControls.br.getActionName,
+            render: makeArrowRenderer("↘")
+          }),
+          mt: new fabric.Control({
+            x: 0,
+            y: -0.5,
+            offsetY: -16,
+            cursorStyle: "ns-resize",
+            actionHandler: baseControls.mt.actionHandler,
+            getActionName: baseControls.mt.getActionName,
+            render: makeArrowRenderer("↑")
+          }),
+          mb: new fabric.Control({
+            x: 0,
+            y: 0.5,
+            offsetY: 16,
+            cursorStyle: "ns-resize",
+            actionHandler: baseControls.mb.actionHandler,
+            getActionName: baseControls.mb.getActionName,
+            render: makeArrowRenderer("↓")
+          }),
+          ml: new fabric.Control({
+            x: -0.5,
+            y: 0,
+            offsetX: -16,
+            cursorStyle: "ew-resize",
+            actionHandler: baseControls.ml.actionHandler,
+            getActionName: baseControls.ml.getActionName,
+            render: makeArrowRenderer("←")
+          }),
+          mr: new fabric.Control({
+            x: 0.5,
+            y: 0,
+            offsetX: 16,
+            cursorStyle: "ew-resize",
+            actionHandler: baseControls.mr.actionHandler,
+            getActionName: baseControls.mr.getActionName,
+            render: makeArrowRenderer("→")
+          }),
+          mtr: new fabric.Control({
+            x: 0,
+            y: -0.5,
+            offsetY: -36,
+            cursorStyleHandler: fabric.controlsUtils.rotationStyleHandler,
+            actionHandler: fabric.controlsUtils.rotationWithSnapping,
+            actionName: "rotate",
+            render: renderRotateIcon
+          }),
+          moveTop: new fabric.Control({
+            x: 0,
+            y: -0.5,
+            offsetY: 2,
+            cursorStyle: "move",
+            actionHandler: fabric.controlsUtils.dragHandler,
+            actionName: "drag",
+            render: renderMoveDot
+          })
+        };
+      }
+
+      function styleObjectControls(obj) {
+        if (!obj || obj.excludeFromExport) return;
+        const customControls = getCustomControls();
+        obj.set({
+          cornerStyle: "circle",
+          cornerColor: "#ffffff",
+          cornerStrokeColor: "#2563eb",
+          cornerSize: 10,
+          borderColor: "#2563eb",
+          borderDashArray: [5, 4],
+          borderScaleFactor: 1.3,
+          padding: 5,
+          rotatingPointOffset: 22,
+          transparentCorners: false
+        });
+        obj.controls = {
+          ...obj.controls,
+          ...customControls
+        };
+        // Показываем стрелки растягивания по 4 сторонам, иконку поворота и точку перемещения.
+        if (typeof obj.setControlsVisibility === "function") {
+          obj.setControlsVisibility({
+            mt: true,
+            mb: true,
+            ml: true,
+            mr: true,
+            tl: true,
+            tr: true,
+            bl: true,
+            br: true,
+            mtr: true,
+            moveTop: true
+          });
+        }
+      }
 
       function isDrawableObject(obj) {
         return obj && !obj.excludeFromExport;
@@ -378,6 +672,125 @@
         state.history = state.history.slice(0, state.historyIndex + 1);
         state.history.push(snapshot);
         state.historyIndex = state.history.length - 1;
+        localStorage.setItem(boardStorageKey, snapshot);
+        saveBoardThumbnail();
+      }
+
+      function saveBoardThumbnail(cropOverride = null) {
+        try {
+          if (cropOverride && cropOverride.type === "screenExact") {
+            const srcCanvas = canvas.lowerCanvasEl;
+            const ratioX = srcCanvas.width / Math.max(1, canvas.getWidth());
+            const ratioY = srcCanvas.height / Math.max(1, canvas.getHeight());
+            const sx = Math.max(0, Math.floor(cropOverride.left * ratioX));
+            const sy = Math.max(0, Math.floor(cropOverride.top * ratioY));
+            const sw = Math.max(1, Math.floor(cropOverride.width * ratioX));
+            const sh = Math.max(1, Math.floor(cropOverride.height * ratioY));
+            const safeW = Math.max(1, Math.min(sw, srcCanvas.width - sx));
+            const safeH = Math.max(1, Math.min(sh, srcCanvas.height - sy));
+
+            const previewScale = PREVIEW_EXPORT_MULTIPLIER;
+            const previewCanvas = document.createElement("canvas");
+            previewCanvas.width = Math.max(1, Math.floor(safeW * previewScale));
+            previewCanvas.height = Math.max(1, Math.floor(safeH * previewScale));
+            const previewCtx = previewCanvas.getContext("2d");
+            previewCtx.imageSmoothingEnabled = false;
+            previewCtx.drawImage(
+              srcCanvas,
+              sx,
+              sy,
+              safeW,
+              safeH,
+              0,
+              0,
+              previewCanvas.width,
+              previewCanvas.height,
+            );
+
+            const thumbScale = Math.min(1, 280 / Math.max(safeW, safeH));
+            const thumbW = Math.max(1, Math.floor(safeW * thumbScale));
+            const thumbH = Math.max(1, Math.floor(safeH * thumbScale));
+            const thumbCanvas = document.createElement("canvas");
+            thumbCanvas.width = thumbW;
+            thumbCanvas.height = thumbH;
+            const thumbCtx = thumbCanvas.getContext("2d");
+            thumbCtx.imageSmoothingEnabled = true;
+            thumbCtx.imageSmoothingQuality = "high";
+            thumbCtx.drawImage(previewCanvas, 0, 0, safeW, safeH, 0, 0, thumbW, thumbH);
+
+            localStorage.setItem(boardPreviewKey, previewCanvas.toDataURL("image/png"));
+            localStorage.setItem(boardThumbKey, thumbCanvas.toDataURL("image/png"));
+            return;
+          }
+
+          if (cropOverride && cropOverride.type === "canvas") {
+            const exportArea = {
+              left: Math.max(0, cropOverride.left),
+              top: Math.max(0, cropOverride.top),
+              width: Math.max(1, cropOverride.width),
+              height: Math.max(1, cropOverride.height)
+            };
+            const preview = canvas.toDataURL({
+              format: "png",
+              quality: 1,
+              multiplier: PREVIEW_EXPORT_MULTIPLIER,
+              withoutTransform: true,
+              ...exportArea
+            });
+            const thumb = canvas.toDataURL({
+              format: "png",
+              quality: 1,
+              multiplier: 1,
+              withoutTransform: true,
+              ...exportArea
+            });
+            localStorage.setItem(boardPreviewKey, preview);
+            localStorage.setItem(boardThumbKey, thumb);
+            return;
+          }
+
+          const drawables = canvas.getObjects().filter((obj) => isDrawableObject(obj));
+          let crop = null;
+          if (drawables.length) {
+            let minLeft = Number.POSITIVE_INFINITY;
+            let minTop = Number.POSITIVE_INFINITY;
+            let maxRight = Number.NEGATIVE_INFINITY;
+            let maxBottom = Number.NEGATIVE_INFINITY;
+            drawables.forEach((obj) => {
+              const bounds = obj.getBoundingRect(true, true);
+              minLeft = Math.min(minLeft, bounds.left);
+              minTop = Math.min(minTop, bounds.top);
+              maxRight = Math.max(maxRight, bounds.left + bounds.width);
+              maxBottom = Math.max(maxBottom, bounds.top + bounds.height);
+            });
+            const pad = 20;
+            const left = Math.max(0, minLeft - pad);
+            const top = Math.max(0, minTop - pad);
+            const width = Math.max(1, Math.min(canvas.getWidth() - left, maxRight - minLeft + pad * 2));
+            const height = Math.max(1, Math.min(canvas.getHeight() - top, maxBottom - minTop + pad * 2));
+            crop = { left, top, width, height };
+          }
+          if (cropOverride && cropOverride.width > 1 && cropOverride.height > 1) {
+            crop = cropOverride;
+          }
+
+          const thumb = canvas.toDataURL({
+            format: "png",
+            quality: 0.9,
+            multiplier: 0.2,
+            withoutTransform: true,
+            ...(crop || {})
+          });
+          const preview = canvas.toDataURL({
+            format: "png",
+            quality: 1,
+            multiplier: PREVIEW_EXPORT_MULTIPLIER,
+            withoutTransform: true,
+            ...(crop || {})
+          });
+          localStorage.setItem(boardThumbKey, thumb);
+          localStorage.setItem(boardPreviewKey, preview);
+        } catch {}
       }
 
       function restoreFromSnapshot(snapshot) {
@@ -677,12 +1090,20 @@
         setActiveButton(mode);
         canvas.isDrawingMode = mode === "draw" || mode === "eraser";
         canvas.selection = mode === "select";
+        canvas.skipTargetFind = mode === "draw" || mode === "eraser";
+
+        // В режиме кисти/ластика не оставляем активное выделение,
+        // чтобы первый же жест сразу рисовал линию.
+        if (mode === "draw" || mode === "eraser") {
+          canvas.discardActiveObject();
+        }
 
         canvas.forEachObject((obj) => {
           if (!isDrawableObject(obj)) return;
           obj.selectable = mode === "select";
           obj.evented = mode === "select";
         });
+        canvas.requestRenderAll();
 
         if (mode === "draw") {
           setupBrush(colorPicker.value, brushSize.value);
@@ -699,8 +1120,10 @@
           fill: textColorPicker.value,
           fontSize: textSize,
           fontFamily: fontFamilySelect.value || "Inter",
+          objectCaching: false,
           name: "Text"
         });
+        styleObjectControls(text);
         canvas.add(text);
         canvas.setActiveObject(text);
         canvas.renderAll();
@@ -739,6 +1162,8 @@
             restoreFromSnapshot(snapshot);
             state.history = [snapshot];
             state.historyIndex = 0;
+            localStorage.setItem(boardStorageKey, snapshot);
+            saveBoardThumbnail();
           } catch (error) {
             alert("Не удалось загрузить JSON: " + error.message);
           }
@@ -823,6 +1248,33 @@
         const isLight = document.body.classList.contains("theme-light");
         applyTheme(isLight ? "dark" : "light");
       });
+      if (toggleLayersBtn) {
+        toggleLayersBtn.addEventListener("click", () => {
+          const visible = layersPanel.style.display !== "none";
+          setLayersVisible(!visible);
+        });
+      }
+      if (actionBookmarkBtn) {
+        actionBookmarkBtn.addEventListener("click", () => {
+          window.parent.postMessage({ type: "fabric-bookmark-request" }, "*");
+        });
+      }
+      if (actionExitBtn) {
+        actionExitBtn.addEventListener("click", () => {
+          window.parent.postMessage({ type: "fabric-exit-request" }, "*");
+        });
+      }
+      if (actionFullscreenBtn) {
+        actionFullscreenBtn.addEventListener("click", () => {
+          toggleFullscreenMode();
+        });
+      }
+      if (floatingFullscreenExitBtn) {
+        floatingFullscreenExitBtn.addEventListener("click", () => {
+          if (!document.fullscreenElement) return;
+          document.exitFullscreen?.();
+        });
+      }
 
       document.getElementById("delete-selected").addEventListener("click", () => {
         const active = canvas.getActiveObjects();
@@ -834,6 +1286,10 @@
         updateLayersPanel();
       });
 
+      document.getElementById("undo-action").addEventListener("click", () => {
+        undo();
+      });
+
       document.getElementById("clear-canvas").addEventListener("click", () => {
         canvas.getObjects().filter((obj) => isDrawableObject(obj)).forEach((obj) => canvas.remove(obj));
         canvas.backgroundColor = "#ffffff";
@@ -841,6 +1297,108 @@
         canvas.renderAll();
         saveHistorySnapshot();
         updateLayersPanel();
+      });
+
+      function persistBoardState(cropOverride = null) {
+        localStorage.setItem(boardStorageKey, getProjectJSON());
+        saveBoardThumbnail(cropOverride);
+      }
+
+      function loadBoardState() {
+        const saved = localStorage.getItem(boardStorageKey);
+        if (!saved) {
+          saveHistorySnapshot();
+          return;
+        }
+        state.isHistoryBusy = true;
+        restoreFromSnapshot(saved);
+        state.history = [saved];
+        state.historyIndex = 0;
+      }
+
+      function applyReadonlyMode() {
+        if (!isReadOnly) return;
+        document.querySelectorAll("button, input, select").forEach((el) => {
+          if (
+            el.id === "theme-toggle" ||
+            el.id === "action-exit" ||
+            el.id === "action-fullscreen"
+          ) {
+            return;
+          }
+          el.disabled = true;
+        });
+        canvas.selection = false;
+        canvas.isDrawingMode = false;
+        canvas.forEachObject((obj) => {
+          obj.selectable = false;
+          obj.evented = false;
+        });
+        canvas.defaultCursor = "default";
+        canvas.renderAll();
+      }
+
+      function pickSaveArea() {
+        return new Promise((resolve) => {
+          state.saveCropMode = true;
+          state.pendingCropResolve = resolve;
+          state.saveCropRect = null;
+          state.cropStartX = 0;
+          state.cropStartY = 0;
+          canvas.discardActiveObject();
+          canvas.isDrawingMode = false;
+          canvas.selection = false;
+          canvas.defaultCursor = "crosshair";
+          canvas.requestRenderAll();
+        });
+      }
+
+      function finishSaveAreaSelection(crop) {
+        if (state.saveCropRect) {
+          canvas.remove(state.saveCropRect);
+          state.saveCropRect = null;
+          canvas.requestRenderAll();
+        }
+        state.saveCropMode = false;
+        canvas.defaultCursor = "default";
+        canvas.selection = state.mode === "select";
+        if (state.mode === "draw" || state.mode === "eraser") {
+          canvas.isDrawingMode = true;
+        }
+        const resolve = state.pendingCropResolve;
+        state.pendingCropResolve = null;
+        if (resolve) resolve(crop);
+      }
+
+      async function handleSaveRequest(chooseArea) {
+        let crop = null;
+        if (chooseArea) {
+          const wantsArea = window.confirm(
+            "Выбрать область для сохранения превью? Нажми OK, затем выдели область на холсте.",
+          );
+          if (wantsArea) {
+            crop = await pickSaveArea();
+          }
+        }
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        persistBoardState(crop);
+        window.parent.postMessage({ type: "fabric-save-done" }, "*");
+      }
+
+      window.addEventListener("message", (event) => {
+        if (!event.data) return;
+        if (event.data.type === "fabric-bookmark-done") {
+          if (actionBookmarkBtn && event.data.label) {
+            const base = "☆ Добавить в закладки";
+            actionBookmarkBtn.textContent = event.data.label;
+            window.setTimeout(() => {
+              actionBookmarkBtn.textContent = base;
+            }, 1300);
+          }
+          return;
+        }
+        if (event.data.type !== "fabric-save-request") return;
+        handleSaveRequest(Boolean(event.data.chooseArea));
       });
 
       canvas.on("mouse:wheel", (opt) => {
@@ -853,6 +1411,47 @@
       });
 
       canvas.on("mouse:down", (opt) => {
+        if (state.saveCropMode) {
+          const pointer = canvas.getPointer(opt.e);
+          const rect = canvas.upperCanvasEl.getBoundingClientRect();
+          state.cropStartX = pointer.x;
+          state.cropStartY = pointer.y;
+          state.cropStartScreenX = opt.e.clientX - rect.left;
+          state.cropStartScreenY = opt.e.clientY - rect.top;
+          state.cropEndScreenX = state.cropStartScreenX;
+          state.cropEndScreenY = state.cropStartScreenY;
+          if (state.saveCropRect) {
+            canvas.remove(state.saveCropRect);
+          }
+          state.saveCropRect = new fabric.Rect({
+            left: pointer.x,
+            top: pointer.y,
+            width: 1,
+            height: 1,
+            fill: "rgba(37,99,235,0.15)",
+            stroke: "#2563eb",
+            strokeWidth: 1.5,
+            strokeDashArray: [6, 4],
+            selectable: false,
+            evented: false,
+            excludeFromExport: true
+          });
+          canvas.add(state.saveCropRect);
+          canvas.requestRenderAll();
+          opt.e.preventDefault();
+          opt.e.stopPropagation();
+          return;
+        }
+        if (opt.e.button === 2) {
+          state.isRightPanning = true;
+          state.isPanning = true;
+          state.lastPanX = opt.e.clientX;
+          state.lastPanY = opt.e.clientY;
+          canvas.selection = false;
+          opt.e.preventDefault();
+          opt.e.stopPropagation();
+          return;
+        }
         if (state.spacePressed) {
           state.isPanning = true;
           canvas.selection = false;
@@ -873,6 +1472,7 @@
             evented: false,
             name: "Line"
           });
+          styleObjectControls(state.currentShape);
         } else if (state.mode === "rect") {
           state.currentShape = new fabric.Rect({
             left: state.startX,
@@ -886,6 +1486,7 @@
             evented: false,
             name: "Rect"
           });
+          styleObjectControls(state.currentShape);
         } else if (state.mode === "circle") {
           state.currentShape = new fabric.Ellipse({
             left: state.startX,
@@ -899,6 +1500,7 @@
             evented: false,
             name: "Ellipse"
           });
+          styleObjectControls(state.currentShape);
         } else if (state.mode === "square") {
           state.currentShape = new fabric.Rect({
             left: state.startX,
@@ -912,15 +1514,35 @@
             evented: false,
             name: "Square"
           });
+          styleObjectControls(state.currentShape);
         }
 
         canvas.add(state.currentShape);
       });
 
       canvas.on("mouse:move", (opt) => {
+        if (state.saveCropMode && state.saveCropRect) {
+          const pointer = canvas.getPointer(opt.e);
+          const rect = canvas.upperCanvasEl.getBoundingClientRect();
+          const left = Math.min(state.cropStartX, pointer.x);
+          const top = Math.min(state.cropStartY, pointer.y);
+          const width = Math.abs(pointer.x - state.cropStartX);
+          const height = Math.abs(pointer.y - state.cropStartY);
+          state.cropEndScreenX = opt.e.clientX - rect.left;
+          state.cropEndScreenY = opt.e.clientY - rect.top;
+          state.saveCropRect.set({ left, top, width, height });
+          state.saveCropRect.setCoords();
+          canvas.requestRenderAll();
+          return;
+        }
         if (state.isPanning) {
-          const delta = new fabric.Point(opt.e.movementX, opt.e.movementY);
+          const dx = opt.e.clientX - state.lastPanX;
+          const dy = opt.e.clientY - state.lastPanY;
+          state.lastPanX = opt.e.clientX;
+          state.lastPanY = opt.e.clientY;
+          const delta = new fabric.Point(dx, dy);
           canvas.relativePan(delta);
+          canvas.requestRenderAll();
           return;
         }
 
@@ -959,8 +1581,30 @@
       });
 
       canvas.on("mouse:up", () => {
+        if (state.saveCropMode) {
+          const rect = state.saveCropRect;
+          if (!rect || rect.width < 8 || rect.height < 8) {
+            finishSaveAreaSelection(null);
+            return;
+          }
+          const left = Math.min(state.cropStartScreenX, state.cropEndScreenX);
+          const top = Math.min(state.cropStartScreenY, state.cropEndScreenY);
+          const width = Math.abs(state.cropEndScreenX - state.cropStartScreenX);
+          const height = Math.abs(state.cropEndScreenY - state.cropStartScreenY);
+          finishSaveAreaSelection({
+            type: "screenExact",
+            left,
+            top,
+            width,
+            height
+          });
+          return;
+        }
         if (state.isPanning) {
           state.isPanning = false;
+          state.isRightPanning = false;
+          state.lastPanX = 0;
+          state.lastPanY = 0;
           canvas.selection = state.mode === "select";
           clearGuides();
           return;
@@ -981,13 +1625,23 @@
         updateLayersPanel();
       });
 
-      canvas.on("path:created", () => {
+      canvas.on("path:created", (event) => {
+        // Для режима рисования сразу фиксируем объект как невыделяемый
+        // и принудительно обновляем canvas, чтобы линия была видна мгновенно.
+        const path = event && event.path;
+        if (path && (state.mode === "draw" || state.mode === "eraser")) {
+          path.set({ selectable: false, evented: false });
+          styleObjectControls(path);
+        }
         saveHistorySnapshot();
         updateLayersPanel();
+        canvas.requestRenderAll();
       });
       canvas.on("object:added", () => {
+        canvas.getObjects().forEach((obj) => styleObjectControls(obj));
         updateLayersPanel();
         updateTextSizeControl();
+        canvas.requestRenderAll();
       });
       canvas.on("object:modified", () => {
         saveHistorySnapshot();
@@ -1012,37 +1666,17 @@
       });
       canvas.on("text:selection:changed", updateTextSizeControl);
       canvas.on("text:editing:entered", updateTextSizeControl);
-      canvas.on("text:changed", updateTextSizeControl);
-
-      canvas.on("object:moving", (event) => {
-        const obj = event.target;
-        if (!obj || !isDrawableObject(obj)) return;
-        clearGuides();
-
-        const threshold = 6;
-        const movingBounds = obj.getBoundingRect();
-        const movingCX = movingBounds.left + movingBounds.width / 2;
-        const movingCY = movingBounds.top + movingBounds.height / 2;
-
-        canvas.getObjects().forEach((other) => {
-          if (other === obj || !isDrawableObject(other)) return;
-          const b = other.getBoundingRect();
-          const xPoints = [b.left, b.left + b.width / 2, b.left + b.width];
-          const yPoints = [b.top, b.top + b.height / 2, b.top + b.height];
-          xPoints.forEach((x) => {
-            if (Math.abs(movingCX - x) <= threshold) {
-              obj.set("left", (obj.left || 0) + (x - movingCX));
-              drawGuideLine(x, 0, x, canvas.getHeight());
-            }
-          });
-          yPoints.forEach((y) => {
-            if (Math.abs(movingCY - y) <= threshold) {
-              obj.set("top", (obj.top || 0) + (y - movingCY));
-              drawGuideLine(0, y, canvas.getWidth(), y);
-            }
-          });
-        });
+      canvas.on("text:changed", (event) => {
+        if (event && event.target && typeof event.target.initDimensions === "function") {
+          event.target.objectCaching = false;
+          event.target.initDimensions();
+          event.target.setCoords();
+        }
+        updateTextSizeControl();
+        canvas.requestRenderAll();
       });
+
+      // Snap/guide lines intentionally disabled for free moving.
 
       function isTypingTarget(target) {
         if (!target) return false;
@@ -1060,6 +1694,11 @@
         }
 
         if (event.ctrlKey || event.metaKey) {
+          if (event.code === "KeyZ") {
+            event.preventDefault();
+            undo();
+            return;
+          }
           const activeText = canvas.getActiveObject();
           if (isTextObject(activeText) && (event.code === "KeyB" || event.code === "KeyI" || event.code === "KeyU")) {
             event.preventDefault();
@@ -1109,10 +1748,31 @@
       document.addEventListener("keyup", (event) => {
         if (event.code === "Space") {
           state.spacePressed = false;
-          state.isPanning = false;
+          if (!state.isRightPanning) {
+            state.isPanning = false;
+          }
           canvas.defaultCursor = "default";
         }
       });
+
+      canvas.upperCanvasEl.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+      });
+
+      document.addEventListener("mouseup", () => {
+        if (!state.isRightPanning) return;
+        state.isPanning = false;
+        state.isRightPanning = false;
+        state.lastPanX = 0;
+        state.lastPanY = 0;
+        canvas.selection = state.mode === "select";
+      });
+
+      document.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape" || !state.saveCropMode) return;
+        finishSaveAreaSelection(null);
+      });
+      document.addEventListener("fullscreenchange", syncFullscreenLabel);
 
       window.addEventListener("resize", resizeCanvas);
 
@@ -1120,9 +1780,12 @@
       applyTheme(savedTheme || "dark");
       resizeCanvas();
       setMode("select");
-      saveHistorySnapshot();
+      loadBoardState();
+      applyReadonlyMode();
       updateLayersPanel();
       updateTextSizeControl();
+      setLayersVisible(true);
+      syncFullscreenLabel();
     </script>
   </body>
 </html>

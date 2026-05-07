@@ -41,85 +41,45 @@
           <!-- Генерируем 30 кубиков -->
         </div>
       </div>
-      <div class="board-page" id="board-page">
-        <button type="button" class="back-btn board-back-btn wb-wall-btn">
-          ← Назад
+      <div class="master-boards-page">
+        <button type="button" class="back-btn master-boards-back-btn">
+          ← Главное меню
         </button>
+        <h2>Мои шаблоны досок</h2>
+        <div class="master-boards-grid" id="master-boards-grid"></div>
+        <div class="master-preview-modal" id="master-preview-modal" hidden>
+          <div class="master-preview-card">
+            <button type="button" class="master-preview-close" id="master-preview-close">
+              ✕
+            </button>
+            <h3 class="master-preview-title" id="master-preview-title">
+              Предпросмотр шаблона
+            </h3>
+            <div class="master-preview-image-wrap">
+              <img
+                id="master-preview-image"
+                class="master-preview-image"
+                alt="Предпросмотр доски"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="board-page" id="board-page">
         <div class="wb-room" aria-hidden="true"></div>
         <div class="wb-board">
-          <div class="whiteboard-wrap paint-sheet">
+          <div class="fabric-board-host" id="fabric-board-host">
             <p class="wb-readonly-banner" id="wb-readonly-banner" hidden>
-              Просмотр начальника: редактировать может только мастер этой
-              бригады.
+              Просмотр начальника: редактирование выключено.
             </p>
-            <h2 class="paint-title" id="board-title">Оперативная доска — ББ</h2>
-            <div class="paint-toolbar" id="paint-toolbar">
-              <button type="button" data-tool="pen">Кисть</button>
-              <button type="button" data-tool="eraser">Ластик</button>
-              <button type="button" data-tool="line">Линия</button>
-              <button type="button" data-tool="rect">Прямоугольник</button>
-              <button type="button" data-tool="circle">Круг</button>
-              <button type="button" data-tool="fill">Заливка</button>
-              <button type="button" data-tool="text">Текст</button>
-              <button type="button" data-tool="textbox">Текст + рамка</button>
-              <button type="button" data-tool="smartbox">Умная рамка</button>
-              <label
-                >Цвет <input type="color" id="paint-color" value="#0d47a1"
-              /></label>
-              <label
-                >Толщина
-                <input type="range" id="paint-size" min="1" max="24" value="3"
-              /></label>
-              <label
-                >Шрифт
-                <select id="paint-font-family">
-                  <option value="Kalam">Kalam</option>
-                  <option value="Caveat">Caveat</option>
-                  <option value="Patrick Hand">Patrick Hand</option>
-                  <option value="Neucha">Neucha</option>
-                  <option value="Bad Script">Bad Script</option>
-                  <option value="Marck Script">Marck Script</option>
-                  <option value="Arial">Arial</option>
-                  <option value="Verdana">Verdana</option>
-                  <option value="Tahoma">Tahoma</option>
-                  <option value="Trebuchet MS">Trebuchet MS</option>
-                  <option value="Georgia">Georgia</option>
-                  <option value="Times New Roman">Times</option>
-                  <option value="Courier New">Courier</option>
-                  <option value="'Comic Sans MS'">Comic Sans</option>
-                  <option value="Segoe UI">Segoe UI</option>
-                  <option value="Roboto">Roboto</option>
-                  <option value="Montserrat">Montserrat</option>
-                  <option value="PT Sans">PT Sans</option>
-                  <option value="Impact">Impact</option>
-                </select>
-              </label>
-              <label
-                >Размер текста
-                <input
-                  type="range"
-                  id="paint-font-size"
-                  min="12"
-                  max="96"
-                  value="28"
-              /></label>
-              <div class="paint-text-controls" id="paint-text-controls">
-                <button type="button" id="paint-bold">Жирный</button>
-                <button type="button" id="paint-italic">Курсив</button>
-                <button type="button" id="paint-underline">Подчерк.</button>
-                <button type="button" id="paint-strike">Зачерк.</button>
-              </div>
-              <div class="paint-palette" id="paint-palette"></div>
-              <button type="button" id="paint-undo">Отменить</button>
-              <button type="button" id="paint-clear">Очистить</button>
-              <button type="button" id="paint-save">Сохранить</button>
-              <button type="button" id="paint-export">Скачать PNG</button>
-            </div>
-            <div class="paint-stage">
-              <div class="paint-board-bg"></div>
-              <canvas id="paint-canvas" width="1600" height="900"></canvas>
-            </div>
-            <p class="wb-hint" id="wb-save-hint" aria-live="polite"></p>
+            <h2 class="fabric-board-title" id="board-title">
+              Оперативная доска — ББ
+            </h2>
+            <iframe
+              id="fabric-board-frame"
+              class="fabric-board-frame"
+              title="Fabric board"
+            ></iframe>
           </div>
         </div>
       </div>
@@ -175,7 +135,6 @@
     </div>
     <script defer src="scripts/utils.js"></script>
     <script defer src="scripts/auth.js"></script>
-    <script defer src="scripts/storage.js"></script>
     <script defer src="scripts/main.js"></script>
   </body>
 </html>
