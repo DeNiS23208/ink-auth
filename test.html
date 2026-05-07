@@ -10,7 +10,6 @@
     />
     <style>
       :root {
-        --toolbar-height: 108px;
         --panel-width: 280px;
         --bg: #f2f4f8;
         --panel-bg: #141922;
@@ -68,13 +67,13 @@
       }
 
       .toolbar {
-        min-height: var(--toolbar-height);
         padding: 10px 12px;
         background: var(--panel-bg);
         border-bottom: 1px solid var(--panel-border);
         display: grid;
         gap: 8px;
         color: var(--panel-text);
+        flex: 0 0 auto;
       }
 
       .toolbar-row {
@@ -153,7 +152,8 @@
       .board {
         position: relative;
         width: 100%;
-        height: calc(100% - var(--toolbar-height));
+        flex: 1 1 auto;
+        min-height: 0;
       }
 
       .floating-fullscreen-exit {
@@ -189,6 +189,7 @@
       .canvas-wrap {
         width: 100%;
         height: 100%;
+        background: #ffffff;
       }
 
       #drawing-canvas {
@@ -457,6 +458,8 @@
         if (floatingFullscreenExitBtn) {
           floatingFullscreenExitBtn.hidden = !isFullscreen;
         }
+        // В fullscreen меняется доступная высота: принудительно пересчитываем размер холста.
+        requestAnimationFrame(() => resizeCanvas());
       }
 
       // Единый аккуратный стиль контролов Fabric (рамка/хэндлы/поворот)
