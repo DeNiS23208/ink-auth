@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Вход через ворота</title>
+  <style>
+    :root {
+      --gate: url("logo-ink.png");
+      /* Глаза. X — внутри своей створки (0% = внешний край, 100% = к центру), Y — от верха сцены. */
+      --eye-y: 46.39593908629442%;
+      --eye-left-x: 92.046783625731%;
+      --eye-right-x: 6.900584795321635%;
+      /* Пасть — точка, откуда лев выдыхает пар. */
+      --mouth-y: 57.25888324873096%;
+      --mouth-left-x: 99.76608187134502%;
+      --mouth-right-x: 0%;
+
+      --eye-core: #ffffff;
+      --eye-mid: #b8ffc6;
+      --eye-bright: #6dff86;
+      --eye-deep: #1fcc4a;
+      --eye-glow: rgba(80, 255, 120, 0.95);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: #000;
+      overflow: hidden;
+      font-family: Georgia, "Times New Roman", serif;
+      color: #f5efe8;
+    }
+
+    body { display: grid; place-items: center; }
+
+    .scene {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background: #000;
+    }
+
+    .behind {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      background:
+        radial-gradient(ellipse at 50% 55%, rgba(180, 220, 255, 0.55) 0%, rgba(70, 110, 160, 0.35) 22%, rgba(20, 40, 70, 0.85) 50%, #03070d 80%, #000 100%);
+    }
+
+    .behind::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 50% 55%, rgba(220, 240, 255, 0.55), transparent 32%);
+      mix-blend-mode: screen;
+      opacity: 0;
+      transition: opacity 3s ease 2.8s;
+    }
+
+    .scene.opening .behind::before { opacity: 1; }
+
+    .frost-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+      background:
+        radial-gradient(ellipse at 50% 60%, rgba(207, 233, 255, 0.55) 0%, transparent 35%),
+        radial-gradient(circle at 35% 50%, rgba(207, 233, 255, 0.18) 0%, transparent 40%),
+        radial-gradient(circle at 65% 50%, rgba(207, 233, 255, 0.18) 0%, transparent 40%);
+      filter: blur(6px);
+      opacity: 0;
+      transition: opacity 3s ease 2.4s;
+    }
+
+    .scene.opening .frost-overlay { opacity: 1; }
+
+    .fog {
+      position: absolute;
+      inset: 0;
+      z-index: 4;
+      pointer-events: none;
+      overflow: hidden;
+    }
+
+    .fog-puff {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 360px;
+      height: 360px;
+      border-radius: 50%;
+      background: radial-gradient(circle,
+        rgba(240, 250, 255, 0.95) 0%,
+        rgba(215, 235, 255, 0.7) 25%,
+        rgba(190, 220, 245, 0.35) 55%,
+        rgba(180, 210, 240, 0) 75%);
+      filter: url(#fogTurb) blur(22px);
+      transform: translate(-50%, -50%) scale(.2);
+      opacity: 0;
+      mix-blend-mode: screen;
+      will-change: transform, opacity;
+    }
+
+    /* холодный туман валится из щели вниз и в стороны (как из морозилки) */
+    .scene.opening .fog-puff { animation-fill-mode: forwards; animation-timing-function: cubic-bezier(.3, .1, .25, 1); }
+
+    .fog-puff.p1 { width: 280px; height: 280px; top: 48%; }
+    .scene.opening .fog-puff.p1 { animation: puffDownLeft 5s 2.4s; }
+
+    .fog-puff.p2 { width: 280px; height: 280px; top: 48%; }
+    .scene.opening .fog-puff.p2 { animation: puffDownRight 5s 2.55s; }
+
+    .fog-puff.p3 { width: 220px; height: 220px; top: 52%; }
+    .scene.opening .fog-puff.p3 { animation: puffFall 5.5s 2.8s; }
+
+    .fog-puff.p4 { width: 320px; height: 320px; top: 50%; }
+    .scene.opening .fog-puff.p4 { animation: puffSpreadLeft 6.5s 3.0s; }
+
+    .fog-puff.p5 { width: 320px; height: 320px; top: 50%; }
+    .scene.opening .fog-puff.p5 { animation: puffSpreadRight 6.5s 3.1s; }
+
+    .fog-puff.p6 { width: 520px; height: 380px; top: 60%; }
+    .scene.opening .fog-puff.p6 { animation: puffGroundCarpet 7.5s 3.2s; }
+
+    .fog-puff.p7 { width: 200px; height: 200px; top: 42%; }
+    .scene.opening .fog-puff.p7 { animation: puffDriftUp 6s 2.7s; }
+
+    .fog-puff.p8 { width: 240px; height: 240px; top: 46%; }
+    .scene.opening .fog-puff.p8 { animation: puffDownLeft 6s 3.4s; }
+
+    .fog-puff.p9 { width: 240px; height: 240px; top: 46%; }
+    .scene.opening .fog-puff.p9 { animation: puffDownRight 6s 3.55s; }
+
+    @keyframes puffFall {
+      0%   { opacity: 0;   transform: translate(-50%, -50%) scale(.2); }
+      20%  { opacity: .9; }
+      60%  { opacity: .8;  transform: translate(-50%, 30%)  scale(1.4); }
+      100% { opacity: 0;   transform: translate(-50%, 110%) scale(2);   }
+    }
+
+    @keyframes puffDownLeft {
+      0%   { opacity: 0;   transform: translate(-50%, -50%) scale(.2); }
+      20%  { opacity: .85; }
+      60%  { opacity: .75; transform: translate(-180%, 20%)  scale(1.5); }
+      100% { opacity: 0;   transform: translate(-260%, 80%)  scale(2.2); }
+    }
+
+    @keyframes puffDownRight {
+      0%   { opacity: 0;   transform: translate(-50%, -50%) scale(.2); }
+      20%  { opacity: .85; }
+      60%  { opacity: .75; transform: translate(80%,  20%)  scale(1.5); }
+      100% { opacity: 0;   transform: translate(160%, 80%)  scale(2.2); }
+    }
+
+    @keyframes puffSpreadLeft {
+      0%   { opacity: 0;   transform: translate(-50%, -50%) scale(.25); }
+      25%  { opacity: .8; }
+      70%  { opacity: .6;  transform: translate(-220%, -10%) scale(1.6); }
+      100% { opacity: 0;   transform: translate(-320%, 30%)  scale(2.4); }
+    }
+
+    @keyframes puffSpreadRight {
+      0%   { opacity: 0;   transform: translate(-50%, -50%) scale(.25); }
+      25%  { opacity: .8; }
+      70%  { opacity: .6;  transform: translate(120%, -10%) scale(1.6); }
+      100% { opacity: 0;   transform: translate(220%, 30%)  scale(2.4); }
+    }
+
+    @keyframes puffGroundCarpet {
+      0%   { opacity: 0;   transform: translate(-50%, -30%) scale(.3); }
+      30%  { opacity: .55; }
+      65%  { opacity: .55; transform: translate(-50%, 40%)  scale(1.7); }
+      100% { opacity: 0;   transform: translate(-50%, 90%)  scale(2.4); }
+    }
+
+    @keyframes puffDriftUp {
+      0%   { opacity: 0;   transform: translate(-50%, -50%) scale(.2); }
+      30%  { opacity: .55; }
+      70%  { opacity: .35; transform: translate(-50%, -180%) scale(1.5); }
+      100% { opacity: 0;   transform: translate(-50%, -280%) scale(2.2); }
+    }
+
+    .gate {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      display: flex;
+      pointer-events: none;
+    }
+
+    .leaf {
+      position: relative;
+      width: 50%;
+      height: 100%;
+      background-image: var(--gate);
+      background-size: 200% 100%;
+      background-repeat: no-repeat;
+      will-change: transform;
+      transition: transform 4s cubic-bezier(.65, .02, .3, 1) 2.1s;
+      box-shadow: inset 0 0 80px rgba(0, 0, 0, .55);
+    }
+
+    .leaf-left  { background-position: left center;  transform-origin: left center; }
+    .leaf-right { background-position: right center; transform-origin: right center; }
+
+    .leaf::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 14px;
+      background: linear-gradient(90deg, transparent, rgba(0,0,0,.75));
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    .leaf-left::after { right: 0; }
+    .leaf-right::after { left: 0; background: linear-gradient(90deg, rgba(0,0,0,.75), transparent); }
+
+    .leaf::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(ellipse at 95% 50%, rgba(207, 233, 255, 0.55), transparent 40%),
+        radial-gradient(circle at 90% 30%, rgba(255,255,255,0.35), transparent 25%),
+        radial-gradient(circle at 92% 75%, rgba(255,255,255,0.25), transparent 25%);
+      mix-blend-mode: screen;
+      opacity: 0;
+      transition: opacity 2.5s ease 2.3s;
+      z-index: 4;
+    }
+
+    .leaf-right::before {
+      background:
+        radial-gradient(ellipse at 5% 50%, rgba(207, 233, 255, 0.55), transparent 40%),
+        radial-gradient(circle at 10% 30%, rgba(255,255,255,0.35), transparent 25%),
+        radial-gradient(circle at 8% 75%, rgba(255,255,255,0.25), transparent 25%);
+    }
+
+    .scene.opening .leaf::before { opacity: 1; }
+
+    .scene.opening .leaf-left  { transform: translateX(-105%); }
+    .scene.opening .leaf-right { transform: translateX(105%); }
+
+    /* Логотип ИНК — выжжен/вырезан в правой створке. */
+    .ink-stamp {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: clamp(140px, 30%, 260px);
+      height: auto;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      opacity: .95;
+      z-index: 5;
+      mix-blend-mode: multiply;
+      filter:
+        url(#inkEngrave)
+        drop-shadow(0 1px 0 rgba(0, 0, 0, .8))
+        drop-shadow(0 -1px 0 rgba(220, 180, 130, .25))
+        drop-shadow(2px 4px 5px rgba(0, 0, 0, .5));
+    }
+
+    /* ГЛАЗА — внутри створок, едут вместе с ними. Один цельный градиент, без отдельного ореола. */
+    .eye {
+      position: absolute;
+      top: var(--eye-y);
+      width: 90px;
+      height: 60px;
+      border-radius: 50%;
+      transform: translate(-50%, -50%) scale(0);
+      background:
+        radial-gradient(ellipse,
+          var(--eye-core)            0%,
+          var(--eye-mid)              7%,
+          var(--eye-bright)          16%,
+          rgba(40, 200, 70, .85)     30%,
+          rgba(40, 200, 70, .45)     48%,
+          rgba(40, 200, 70, .18)     65%,
+          transparent                82%
+        );
+      filter: blur(.4px);
+      opacity: 0;
+      pointer-events: none;
+      z-index: 6;
+      mix-blend-mode: screen;
+    }
+
+    .leaf-left  .eye { left: var(--eye-left-x); }
+    .leaf-right .eye { left: var(--eye-right-x); }
+
+    /* ДЫХАНИЕ ЛЬВА — пар изо рта. Точка эмиссии «делится» между двумя створками. */
+    .breath {
+      position: absolute;
+      top: var(--mouth-y);
+      width: 1px; height: 1px;
+      pointer-events: none;
+      z-index: 5;
+    }
+    .leaf-left  .breath { left: var(--mouth-left-x); }
+    .leaf-right .breath { left: var(--mouth-right-x); }
+
+    .breath-puff {
+      position: absolute;
+      left: 0; top: 0;
+      width: 90px;
+      height: 60px;
+      border-radius: 50%;
+      background: radial-gradient(ellipse,
+        rgba(245, 252, 255, 0.95) 0%,
+        rgba(220, 240, 255, 0.55) 30%,
+        rgba(190, 220, 245, 0.2) 60%,
+        transparent 80%);
+      filter: url(#fogTurb) blur(8px);
+      transform: translate(-50%, -50%) scale(.15);
+      opacity: 0;
+      mix-blend-mode: screen;
+      will-change: transform, opacity;
+    }
+
+    .scene.opening .leaf-left  .breath-puff { animation: breathLeft  2.2s ease-out forwards; }
+    .scene.opening .leaf-right .breath-puff { animation: breathRight 2.2s ease-out forwards; }
+
+    .breath-puff.b1 { animation-delay: .55s !important; }
+    .breath-puff.b2 { animation-delay: 1.1s !important; }
+    .breath-puff.b3 { animation-delay: 1.65s !important; }
+
+    @keyframes breathLeft {
+      0%   { opacity: 0;   transform: translate(-50%, -50%) scale(.15); }
+      20%  { opacity: .85; transform: translate(-70%, -40%) scale(.45); }
+      60%  { opacity: .6;  transform: translate(-160%, 30%) scale(1.3); }
+      100% { opacity: 0;   transform: translate(-260%, 80%) scale(2);   }
+    }
+
+    @keyframes breathRight {
+      0%   { opacity: 0;   transform: translate(-50%, -50%) scale(.15); }
+      20%  { opacity: .85; transform: translate(-30%, -40%) scale(.45); }
+      60%  { opacity: .6;  transform: translate(60%,  30%) scale(1.3); }
+      100% { opacity: 0;   transform: translate(160%, 80%) scale(2);   }
+    }
+
+    .scene.opening .eye {
+      animation: eyeAppear 1.8s cubic-bezier(.4, 0, .2, 1) .35s forwards,
+                 eyeFlicker 4s ease-in-out 2.2s infinite;
+    }
+
+    @keyframes eyeAppear {
+      0%   { opacity: 0;   transform: translate(-50%, -50%) scale(0);    filter: brightness(.4) blur(.4px); }
+      30%  { opacity: .55; transform: translate(-50%, -50%) scale(.7);   filter: brightness(1)  blur(.4px); }
+      65%  { opacity: 1;   transform: translate(-50%, -50%) scale(1.25); filter: brightness(1.6) blur(.4px); }
+      85%  { opacity: 1;   transform: translate(-50%, -50%) scale(.95);  filter: brightness(1.1) blur(.4px); }
+      100% { opacity: 1;   transform: translate(-50%, -50%) scale(1);    filter: brightness(1.05) blur(.4px); }
+    }
+
+    @keyframes eyeFlicker {
+      0%, 100% { filter: brightness(1.05) blur(.4px); }
+      48%      { filter: brightness(1.25) blur(.4px); }
+      52%      { filter: brightness(.92)  blur(.4px); }
+    }
+
+    /* Кнопка входа */
+    .login-panel {
+      position: absolute;
+      left: 50%;
+      bottom: 14%;
+      z-index: 7;
+      transform: translateX(-50%);
+      display: grid;
+      gap: 10px;
+      justify-items: center;
+      transition: opacity .7s ease, transform .7s ease;
+    }
+
+    .login-button {
+      border: 1px solid rgba(239, 174, 118, .8);
+      border-radius: 999px;
+      padding: 16px 54px;
+      cursor: pointer;
+      color: #fff7ee;
+      font-size: 20px;
+      letter-spacing: .15em;
+      text-transform: uppercase;
+      font-family: inherit;
+      background:
+        linear-gradient(180deg, rgba(112, 70, 46, .96), rgba(46, 24, 16, .98)),
+        radial-gradient(circle at 50% 0, rgba(255,255,255,.3), transparent 45%);
+      box-shadow:
+        0 0 0 4px rgba(0, 0, 0, .3),
+        0 16px 32px rgba(0, 0, 0, .7),
+        inset 0 1px 0 rgba(255, 255, 255, .25);
+      transition: transform .2s ease, box-shadow .2s ease;
+    }
+
+    .login-button:hover {
+      transform: translateY(-2px);
+      box-shadow:
+        0 0 0 4px rgba(0, 0, 0, .3),
+        0 18px 36px rgba(0, 0, 0, .75),
+        0 0 30px rgba(177, 78, 38, .45),
+        inset 0 1px 0 rgba(255, 255, 255, .3);
+    }
+
+    .login-button:active { transform: translateY(1px) scale(.98); }
+
+    .hint {
+      font-size: 13px;
+      letter-spacing: .1em;
+      color: rgba(245, 239, 232, .65);
+      text-shadow: 0 2px 8px #000;
+    }
+
+    .scene.opening .login-panel {
+      opacity: 0;
+      transform: translate(-50%, 18px);
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <main class="scene" id="scene">
+    <div class="behind"></div>
+    <div class="frost-overlay"></div>
+
+    <div class="gate" aria-hidden="true">
+      <div class="leaf leaf-left">
+        <span class="eye"></span>
+        <div class="breath">
+          <span class="breath-puff b1"></span>
+          <span class="breath-puff b2"></span>
+          <span class="breath-puff b3"></span>
+        </div>
+      </div>
+      <div class="leaf leaf-right">
+        <img class="ink-stamp" src="ink-logo.png" alt="" aria-hidden="true">
+        <span class="eye"></span>
+        <div class="breath">
+          <span class="breath-puff b1"></span>
+          <span class="breath-puff b2"></span>
+          <span class="breath-puff b3"></span>
+        </div>
+      </div>
+    </div>
+
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+      <defs>
+        <filter id="fogTurb" x="-30%" y="-30%" width="160%" height="160%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.012 0.018" numOctaves="2" seed="7" result="noise"/>
+          <feDisplacementMap in="SourceGraphic" in2="noise" scale="120" xChannelSelector="R" yChannelSelector="G"/>
+        </filter>
+        <filter id="keyWhite" color-interpolation-filters="sRGB">
+          <feColorMatrix type="matrix" values="
+            1 0 0 0 0
+            0 1 0 0 0
+            0 0 1 0 0
+            -1 -1 -1 2.6 0"/>
+        </filter>
+
+        <filter id="inkEngrave" x="-15%" y="-15%" width="130%" height="130%" color-interpolation-filters="sRGB">
+          <feColorMatrix type="matrix" values="
+            1 0 0 0 0
+            0 1 0 0 0
+            0 0 1 0 0
+            -1 -1 -1 2.6 0" result="keyed"/>
+
+          <feColorMatrix in="keyed" type="matrix" values="
+            0.14 0 0 0 0
+            0 0.16 0 0 0
+            0 0 0.12 0 0
+            0 0 0 1 0" result="dark"/>
+
+          <feGaussianBlur in="keyed" stdDeviation="1.4" result="blur"/>
+
+          <feSpecularLighting in="blur" surfaceScale="-4" specularConstant="0.85"
+                              specularExponent="22" lighting-color="#ffd9a0" result="spec">
+            <feDistantLight azimuth="135" elevation="55"/>
+          </feSpecularLighting>
+
+          <feComposite in="spec" in2="keyed" operator="in" result="specMasked"/>
+
+          <feComposite in="specMasked" in2="dark" operator="arithmetic" k1="0" k2="1" k3="1" k4="0" result="engraved"/>
+
+          <feGaussianBlur in="keyed" stdDeviation="2" result="blurShadow"/>
+          <feSpecularLighting in="blurShadow" surfaceScale="3" specularConstant="0.4"
+                              specularExponent="18" lighting-color="#000000" result="darkRim">
+            <feDistantLight azimuth="315" elevation="40"/>
+          </feSpecularLighting>
+          <feComposite in="darkRim" in2="keyed" operator="in" result="darkRimMasked"/>
+
+          <feBlend in="engraved" in2="darkRimMasked" mode="multiply"/>
+        </filter>
+      </defs>
+    </svg>
+
+    <div class="fog" aria-hidden="true">
+      <span class="fog-puff p1"></span>
+      <span class="fog-puff p2"></span>
+      <span class="fog-puff p3"></span>
+      <span class="fog-puff p4"></span>
+      <span class="fog-puff p5"></span>
+      <span class="fog-puff p6"></span>
+      <span class="fog-puff p7"></span>
+      <span class="fog-puff p8"></span>
+      <span class="fog-puff p9"></span>
+    </div>
+
+    <div class="login-panel">
+      <button class="login-button" id="loginButton" type="button">Войти</button>
+      <span class="hint">Нажмите, чтобы открыть ворота</span>
+    </div>
+  </main>
+
+  <script>
+    const scene  = document.getElementById('scene');
+    const button = document.getElementById('loginButton');
+
+    button.addEventListener('click', () => {
+      scene.classList.add('opening');
+      button.disabled = true;
+    });
+  </script>
+</body>
+</html>
