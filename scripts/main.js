@@ -1,4 +1,4 @@
-const page = document.getElementById("page");
+﻿const page = document.getElementById("page");
 const form = document.getElementById("auth");
 const errorEl = document.getElementById("error");
 const btn = document.getElementById("submit");
