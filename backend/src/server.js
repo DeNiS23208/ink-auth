@@ -23,11 +23,15 @@ function parseBb(value) {
 
 const defaultBoard = [{ id: "board-1", name: "Шаблон 1" }];
 
-async function ensureDefaultBoard(bb) {
+async function ensureAtLeastOneMasterBoard(bb) {
+  const { rows } = await pool.query(
+    `SELECT 1 FROM master_boards WHERE bb = $1 LIMIT 1`,
+    [bb],
+  );
+  if (rows.length) return;
   await pool.query(
     `INSERT INTO master_boards (bb, board_id, name, sort_order)
-     VALUES ($1, 'board-1', 'Шаблон 1', 0)
-     ON CONFLICT (bb, board_id) DO NOTHING`,
+     VALUES ($1, 'board-1', 'Шаблон 1', 0)`,
     [bb],
   );
 }
@@ -46,7 +50,7 @@ app.get("/api/master-boards/:bb", async (req, res) => {
   if (!bb) return res.status(400).json({ error: "Invalid bb" });
 
   try {
-    await ensureDefaultBoard(bb);
+    await ensureAtLeastOneMasterBoard(bb);
     const { rows } = await pool.query(
       `SELECT board_id, name
        FROM master_boards

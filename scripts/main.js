@@ -185,6 +185,36 @@ function createMasterBoard(bb) {
   return newBoard;
 }
 
+function renameMasterBoard(bb, boardId, newName) {
+  const trimmed = newName.trim();
+  if (!trimmed || trimmed.length > 200) return false;
+  const boards = getMasterBoards(bb);
+  const index = boards.findIndex((board) => board.id === boardId);
+  if (index === -1) return false;
+  if (boards[index].name === trimmed) return true;
+  boards[index] = { ...boards[index], name: trimmed };
+  saveMasterBoards(bb, boards);
+
+  const bookmarks = loadBookmarks().map((entry) =>
+    entry.bb === bb && entry.boardId === boardId ? { ...entry, boardName: trimmed } : entry,
+  );
+  saveBookmarks(bookmarks);
+
+  if (
+    currentOpenBb === bb &&
+    currentOpenBoardId === boardId &&
+    boardPage?.classList.contains("open")
+  ) {
+    currentOpenBoardName = trimmed;
+    const viewOnly = activeSession?.role === "supervisor";
+    boardTitle.textContent = viewOnly
+      ? `Оперативная доска — ББ ${bb} • ${trimmed} (просмотр)`
+      : `Оперативная доска — ББ ${bb} • ${trimmed}`;
+  }
+
+  return true;
+}
+
 async function renderMasterBoards() {
   if (!activeSession || activeSession.role !== "master") return;
   masterBoardsGrid.replaceChildren();
@@ -267,11 +297,32 @@ async function renderMasterBoards() {
     actions.appendChild(previewBtn);
     actions.appendChild(deleteBtn);
     cube.appendChild(actions);
-    const title = document.createElement("div");
-    title.className = "master-template-title";
-    title.textContent = board.name;
+    const titleRow = document.createElement("div");
+    titleRow.className = "master-template-title-row";
+    const titleText = document.createElement("span");
+    titleText.className = "master-template-title";
+    titleText.textContent = board.name;
+    const renameBtn = document.createElement("button");
+    renameBtn.type = "button";
+    renameBtn.className = "master-template-rename-btn";
+    renameBtn.title = "Переименовать";
+    renameBtn.setAttribute("aria-label", "Переименовать шаблон");
+    renameBtn.innerHTML =
+      '<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1.003 1.003 0 0 0 0-1.41l-2.34-2.34a1.003 1.003 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>';
+    renameBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const next = window.prompt("Новое имя шаблона", board.name);
+      if (next == null) return;
+      if (!renameMasterBoard(activeSession.bb, board.id, next)) {
+        window.alert("Введите непустое имя (не длиннее 200 символов).");
+        return;
+      }
+      void renderMasterBoards();
+    });
+    titleRow.appendChild(titleText);
+    titleRow.appendChild(renameBtn);
     item.appendChild(cube);
-    item.appendChild(title);
+    item.appendChild(titleRow);
     masterBoardsGrid.appendChild(item);
   });
   const addCube = document.createElement("button");
