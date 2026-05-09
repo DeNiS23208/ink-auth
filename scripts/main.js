@@ -215,6 +215,17 @@ function renameMasterBoard(bb, boardId, newName) {
   return true;
 }
 
+function promptRenameMasterBoard(board) {
+  if (!activeSession || activeSession.role !== "master") return;
+  const next = window.prompt("Новое имя шаблона", board.name);
+  if (next == null) return;
+  if (!renameMasterBoard(activeSession.bb, board.id, next)) {
+    window.alert("Введите непустое имя (не длиннее 200 символов).");
+    return;
+  }
+  void renderMasterBoards();
+}
+
 async function renderMasterBoards() {
   if (!activeSession || activeSession.role !== "master") return;
   masterBoardsGrid.replaceChildren();
@@ -282,6 +293,14 @@ async function renderMasterBoards() {
       masterPreviewImage.src = preview;
       masterPreviewModal.hidden = false;
     });
+    const renameMenuBtn = document.createElement("button");
+    renameMenuBtn.type = "button";
+    renameMenuBtn.className = "master-template-action-btn";
+    renameMenuBtn.textContent = "Переименовать";
+    renameMenuBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      promptRenameMasterBoard(board);
+    });
     const deleteBtn = document.createElement("button");
     deleteBtn.type = "button";
     deleteBtn.className = "master-template-action-btn";
@@ -295,6 +314,7 @@ async function renderMasterBoards() {
     });
     actions.appendChild(openBtn);
     actions.appendChild(previewBtn);
+    actions.appendChild(renameMenuBtn);
     actions.appendChild(deleteBtn);
     cube.appendChild(actions);
     const titleRow = document.createElement("div");
@@ -305,19 +325,12 @@ async function renderMasterBoards() {
     const renameBtn = document.createElement("button");
     renameBtn.type = "button";
     renameBtn.className = "master-template-rename-btn";
-    renameBtn.title = "Переименовать";
+    renameBtn.title = "Переименовать шаблон";
     renameBtn.setAttribute("aria-label", "Переименовать шаблон");
-    renameBtn.innerHTML =
-      '<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1.003 1.003 0 0 0 0-1.41l-2.34-2.34a1.003 1.003 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>';
+    renameBtn.textContent = "✎";
     renameBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      const next = window.prompt("Новое имя шаблона", board.name);
-      if (next == null) return;
-      if (!renameMasterBoard(activeSession.bb, board.id, next)) {
-        window.alert("Введите непустое имя (не длиннее 200 символов).");
-        return;
-      }
-      void renderMasterBoards();
+      promptRenameMasterBoard(board);
     });
     titleRow.appendChild(titleText);
     titleRow.appendChild(renameBtn);

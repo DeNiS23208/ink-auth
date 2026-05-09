@@ -417,8 +417,10 @@ body {
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  gap: 6px;
-  max-width: 240px;
+  gap: 8px;
+  max-width: 260px;
+  position: relative;
+  z-index: 2;
 }
 
 .master-template-title {
@@ -437,26 +439,31 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  margin-top: 1px;
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  border-radius: 6px;
-  background: rgba(16, 24, 40, 0.75);
-  color: #c8d6ee;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 8px;
+  margin-top: 0;
+  border: 2px solid #1f7a3f;
+  border-radius: 8px;
+  background: #f0fdf4;
+  color: #14532d;
+  font-size: 1.05rem;
+  line-height: 1;
+  font-weight: 700;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  transition: background 0.15s ease, transform 0.12s ease, border-color 0.15s ease;
 }
 
 .master-template-rename-btn:hover {
-  background: rgba(31, 122, 63, 0.45);
-  color: #fff;
-  border-color: rgba(255, 255, 255, 0.5);
+  background: #dcfce7;
+  color: #052e16;
+  border-color: #166534;
+  transform: scale(1.05);
 }
 
 .master-template-rename-btn:focus-visible {
-  outline: 2px solid rgba(180, 220, 255, 0.85);
+  outline: 2px solid rgba(180, 220, 255, 0.95);
   outline-offset: 2px;
 }
 
