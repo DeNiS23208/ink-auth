@@ -1,0 +1,393 @@
+/* Фон сцены — внутри gate-entry, под створками (иначе z-index ворот перекрывал фон целиком) */
+.gate-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.gate-backdrop.hidden {
+  display: none;
+}
+
+.gate-bg-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center center;
+  z-index: 0;
+  opacity: 0;
+  transition: opacity 0.55s ease;
+  pointer-events: none;
+}
+
+.gate-entry-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: var(--gate-bg);
+  transition: opacity 1.1s ease;
+}
+
+.frost-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+  transition: opacity 1.1s ease;
+  background: var(--gate-frost);
+  mix-blend-mode: soft-light;
+}
+
+.gate-backdrop.opening .gate-entry-bg,
+.gate-backdrop.opening .frost-layer,
+.gate-backdrop.opening .gate-bg-video {
+  opacity: 0;
+}
+
+.gate-entry {
+  --eye-y: 46.39593908629442%;
+  --eye-left-x: 92.046783625731%;
+  --eye-right-x: 6.900584795321635%;
+
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  overflow: hidden;
+  background: transparent;
+  pointer-events: none;
+  isolation: isolate;
+}
+
+.gate-entry.hidden {
+  display: none;
+}
+
+.gate-filters {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+.gate-wrap {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  z-index: 3;
+}
+
+.leaf {
+  position: relative;
+  width: 50%;
+  height: 100%;
+  background-image: url("../assets/logo-ink.png");
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  transition:
+    transform 0.95s cubic-bezier(0.45, 0.05, 0.22, 1),
+    filter 0.65s ease,
+    opacity 0.65s ease;
+  box-shadow: inset 0 0 80px rgba(0, 0, 0, 0.55);
+}
+
+/* После успешного логина — длинная анимация отъезда створок */
+.gate-entry.opening .leaf {
+  transition:
+    transform var(--gate-leaf-duration) cubic-bezier(0.65, 0.02, 0.3, 1)
+      var(--gate-leaf-delay),
+    filter 0.65s ease,
+    opacity 0.65s ease;
+}
+
+.leaf-left {
+  background-position: left center;
+  transform-origin: left center;
+}
+
+.leaf-right {
+  background-position: right center;
+  transform-origin: right center;
+}
+
+.leaf::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 14px;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.leaf-left::after {
+  right: 0;
+  background: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.75));
+}
+
+.leaf-right::after {
+  left: 0;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.75), transparent);
+}
+
+.eye {
+  position: absolute;
+  top: var(--eye-y);
+  width: 90px;
+  height: 60px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  background: radial-gradient(
+    ellipse at 50% 45%,
+    rgba(255, 235, 160, 1) 0%,
+    rgba(255, 170, 60, 0.95) 35%,
+    rgba(180, 40, 0, 0.85) 68%,
+    rgba(40, 4, 0, 0.55) 100%
+  );
+  filter: blur(0.4px);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 9;
+  mix-blend-mode: screen;
+}
+
+.leaf-left .eye {
+  left: var(--eye-left-x);
+}
+
+.leaf-right .eye {
+  left: var(--eye-right-x);
+}
+
+.gate-entry.opening .eye {
+  animation:
+    eyeAppear 1.8s cubic-bezier(0.4, 0, 0.2, 1) 0.35s forwards,
+    eyeFlicker 4s ease-in-out 2.2s infinite;
+}
+
+@keyframes eyeAppear {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0);
+    filter: blur(8px);
+  }
+  55% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+    filter: blur(0.4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+    filter: blur(0.4px);
+  }
+}
+
+@keyframes eyeFlicker {
+  0%,
+  100% {
+    opacity: 1;
+    filter: blur(0.4px) brightness(1);
+  }
+  50% {
+    opacity: 0.88;
+    filter: blur(0.4px) brightness(1.38);
+  }
+}
+
+.ink-stamp {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: clamp(110px, 14vw, 210px);
+  transform: translate(-50%, -50%);
+  opacity: 0.94;
+  pointer-events: none;
+  z-index: 4;
+  filter: url(#gateInkEngrave);
+  mix-blend-mode: multiply;
+}
+
+.gate-login {
+  position: absolute;
+  left: 24%;
+  top: 52%;
+  transform: translate(-50%, -50%);
+  width: min(380px, 34vw);
+  min-width: 320px;
+  z-index: 7;
+  pointer-events: auto;
+  padding: 2rem 2rem 2.25rem;
+  border-radius: 18px;
+  background: linear-gradient(
+    145deg,
+    rgba(18, 42, 58, 0.72) 0%,
+    rgba(8, 22, 36, 0.82) 100%
+  );
+  border: 1px solid var(--gate-form-border);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.45),
+    0 0 28px var(--gate-form-glow),
+    0 0 60px var(--gate-form-glow-2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(14px) saturate(1.25);
+  -webkit-backdrop-filter: blur(14px) saturate(1.25);
+  overflow: hidden;
+}
+
+.gate-login::before {
+  content: "";
+  position: absolute;
+  inset: -40% -60%;
+  background: linear-gradient(
+    105deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.09) 50%,
+    transparent 60%
+  );
+  transform: translateX(-35%);
+  animation: gateLoginSheen 7s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes gateLoginSheen {
+  0%,
+  100% {
+    transform: translateX(-45%);
+    opacity: 0.35;
+  }
+  50% {
+    transform: translateX(35%);
+    opacity: 0.65;
+  }
+}
+
+.gate-login h2 {
+  margin: 0 0 1.35rem;
+  font-family: "Cinzel", "Times New Roman", serif;
+  font-weight: 600;
+  font-size: clamp(1.35rem, 2.6vw, 1.75rem);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(230, 245, 238, 0.96);
+  text-shadow:
+    0 0 18px var(--gate-title-glow),
+    0 0 42px rgba(60, 140, 100, 0.25);
+}
+
+.gate-login .field {
+  margin-bottom: 1rem;
+}
+
+.gate-login label {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-family: "Source Sans 3", system-ui, sans-serif;
+  font-size: 0.82rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(200, 230, 215, 0.72);
+}
+
+.gate-login input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.65rem 0.85rem;
+  border-radius: 10px;
+  border: 1px solid var(--gate-input-border);
+  background: rgba(4, 18, 28, 0.65);
+  color: rgba(245, 252, 248, 0.95);
+  font-family: "Source Sans 3", system-ui, sans-serif;
+  font-size: 1rem;
+  outline: none;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
+}
+
+.gate-login input::placeholder {
+  color: rgba(200, 220, 210, 0.35);
+}
+
+.gate-login input:focus {
+  border-color: var(--gate-input-focus);
+  box-shadow:
+    0 0 0 1px var(--gate-input-border),
+    0 0 22px var(--gate-form-glow);
+  background: rgba(6, 28, 42, 0.75);
+}
+
+.gate-login .error {
+  min-height: 1.25rem;
+  margin: 0.35rem 0 0.85rem;
+  font-size: 0.88rem;
+  color: #ffb4b4;
+  text-shadow: 0 0 12px rgba(255, 80, 80, 0.45);
+}
+
+.gate-login .btn {
+  width: 100%;
+  margin-top: 0.25rem;
+  padding: 0.75rem 1rem;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  font-family: "Cinzel", "Times New Roman", serif;
+  font-size: 0.95rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(12, 32, 24, 0.95);
+  background: linear-gradient(180deg, var(--gate-btn-top) 0%, var(--gate-btn-bot) 100%);
+  box-shadow:
+    0 0 24px var(--gate-btn-shadow),
+    0 0 48px var(--gate-form-glow-2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.2s ease,
+    filter 0.2s ease;
+}
+
+.gate-login .btn:hover {
+  filter: brightness(1.06);
+  box-shadow:
+    0 0 32px var(--gate-btn-shadow),
+    0 0 64px var(--gate-form-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.gate-login .btn:active {
+  transform: translateY(1px);
+}
+
+.gate-entry.opening .leaf-left {
+  transform: translateX(-105%);
+}
+
+.gate-entry.opening .leaf-right {
+  transform: translateX(105%);
+}
+
+.gate-entry.opening .gate-login {
+  opacity: 0;
+  transform: translate(-50%, -46%);
+  transition:
+    opacity 0.55s ease 0.12s,
+    transform 0.55s ease 0.12s;
+}
+
+@media (max-width: 980px) {
+  .gate-login {
+    left: 50%;
+    width: min(420px, 88vw);
+    min-width: 0;
+  }
+
+  .eye {
+    width: min(72px, 18vw);
+    height: min(48px, 12vw);
+  }
+}

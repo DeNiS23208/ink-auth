@@ -36,12 +36,13 @@ let currentOpenBoardName = "Шаблон 1";
 let pendingFabricSaveAction = null;
 const MASTER_BOARDS_PREFIX = "ink-auth-master-boards-";
 const BOOKMARKS_KEY = "ink-auth-board-bookmarks";
+const API_BASE = "/api";
 
 if (burgerMenu) burgerMenu.style.display = "none";
 if (sidePanel) sidePanel.style.display = "none";
 
-wrapLetters(realm.querySelector("h1"));
-wrapLetters(realm.querySelectorAll("h1")[1]);
+if (realm?.querySelector("h1")) wrapLetters(realm.querySelector("h1"));
+if (realm?.querySelectorAll("h1")[1]) wrapLetters(realm.querySelectorAll("h1")[1]);
 
 function canEditBoard() {
   return activeSession?.role === "master";
@@ -81,6 +82,28 @@ function setBoardUiMode(active) {
 
 function getMasterBoardsKey(bb) {
   return `${MASTER_BOARDS_PREFIX}${bb}`;
+}
+
+async function fetchMasterBoardsFromServer(bb) {
+  const response = await fetch(`${API_BASE}/master-boards/${bb}`);
+  if (!response.ok) throw new Error(`Cannot load master boards for BB ${bb}`);
+  const payload = await response.json();
+  return Array.isArray(payload?.boards) ? payload.boards : [];
+}
+
+async function saveMasterBoardsToServer(bb, boards) {
+  const response = await fetch(`${API_BASE}/master-boards/${bb}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ boards }),
+  });
+  if (!response.ok) throw new Error(`Cannot save master boards for BB ${bb}`);
+}
+
+async function fetchBoardStateFromServer(bb, boardId) {
+  const response = await fetch(`${API_BASE}/board-state/${bb}/${boardId}?previewOnly=1`);
+  if (!response.ok) throw new Error(`Cannot load board state ${bb}/${boardId}`);
+  return response.json();
 }
 
 function loadBookmarks() {
@@ -125,6 +148,18 @@ function getMasterBoards(bb) {
 
 function saveMasterBoards(bb, boards) {
   localStorage.setItem(getMasterBoardsKey(bb), JSON.stringify(boards));
+  saveMasterBoardsToServer(bb, boards).catch(() => {});
+}
+
+async function syncMasterBoardsFromServer(bb) {
+  try {
+    const boards = await fetchMasterBoardsFromServer(bb);
+    if (boards.length) {
+      localStorage.setItem(getMasterBoardsKey(bb), JSON.stringify(boards));
+      return boards;
+    }
+  } catch {}
+  return getMasterBoards(bb);
 }
 
 function deleteMasterBoard(bb, boardId) {
@@ -150,10 +185,26 @@ function createMasterBoard(bb) {
   return newBoard;
 }
 
-function renderMasterBoards() {
+async function renderMasterBoards() {
   if (!activeSession || activeSession.role !== "master") return;
   masterBoardsGrid.replaceChildren();
-  const boards = getMasterBoards(activeSession.bb);
+  const boards = await syncMasterBoardsFromServer(activeSession.bb);
+  // Синхронизируем превью из БД в localStorage, чтобы карточки досок
+  // отображались одинаково на любых ноутбуках/браузерах.
+  await Promise.all(
+    boards.map(async (board) => {
+      try {
+        const payload = await fetchBoardStateFromServer(activeSession.bb, board.id);
+        if (!payload?.found) return;
+        if (typeof payload.thumb === "string") {
+          localStorage.setItem(getMasterBoardThumbKey(activeSession.bb, board.id), payload.thumb);
+        }
+        if (typeof payload.preview === "string") {
+          localStorage.setItem(getMasterBoardPreviewKey(activeSession.bb, board.id), payload.preview);
+        }
+      } catch {}
+    }),
+  );
   const addItem = document.createElement("div");
   addItem.className = "master-template-item";
   boards.forEach((board) => {
@@ -210,7 +261,7 @@ function renderMasterBoards() {
       const ok = window.confirm(`Удалить "${board.name}"?`);
       if (!ok) return;
       deleteMasterBoard(activeSession.bb, board.id);
-      renderMasterBoards();
+      void renderMasterBoards();
     });
     actions.appendChild(openBtn);
     actions.appendChild(previewBtn);
@@ -230,7 +281,7 @@ function renderMasterBoards() {
   addCube.title = "Создать новую доску";
   addCube.addEventListener("click", () => {
     const created = createMasterBoard(activeSession.bb);
-    renderMasterBoards();
+    void renderMasterBoards();
     currentMasterBoardId = created.id;
     openBoard(activeSession.bb, created.id, created.name);
   });
@@ -283,6 +334,7 @@ function openBoard(bb, boardId = "board-1", boardName = "Шаблон 1") {
     bb: String(bb),
     board: boardId,
     readonly: canEditBoard() ? "0" : "1",
+    v: "20260509-3",
   });
   fabricBoardFrame.src = `test.html?${params.toString()}`;
   setBoardUiMode(true);
@@ -307,33 +359,118 @@ function requestFabricSave(options = {}, onDone = null) {
   );
 }
 
-form.addEventListener("submit", (e) => {
-  e.preventDefault();
-  errorEl.textContent = "";
-  const username = document.getElementById("user").value.trim();
-  const password = document.getElementById("pass").value;
-  const session = authenticateUser(username, password);
-  if (!session) {
-    errorEl.textContent = "Неверный логин или пароль.";
-    return;
-  }
+function applyAuthenticatedSession(session) {
+  if (!session) return;
   activeSession = session;
   if (burgerMenu) burgerMenu.style.display = "";
   if (sidePanel) sidePanel.style.display = "";
   updateWelcomeHeading();
   updateNavBoardsLabel();
   buildBrigadesGrid();
-  renderMasterBoards();
+  void renderMasterBoards();
   applyRoleToBrigadesPage();
   updateBoardBackButton();
-  btn.disabled = true;
-  form.classList.add("hidden");
-  page.classList.add("ignite");
-  window.setTimeout(() => page.classList.add("opening"), IGNITE_BEFORE_OPEN_MS);
-  window.setTimeout(() => {
-    page.classList.add("gates-done");
-    realm.classList.add("visible");
-  }, IGNITE_BEFORE_OPEN_MS + GATE_MS + 120);
+  page.classList.add("gates-done");
+  realm.classList.add("visible");
+}
+
+function performLogout() {
+  sessionStorage.removeItem("ink-auth-session");
+  activeSession = null;
+
+  if (burgerMenu) burgerMenu.style.display = "none";
+  if (sidePanel) {
+    sidePanel.style.display = "none";
+    sidePanel.classList.remove("open");
+  }
+  burgerIcon.classList.remove("open");
+
+  realm.classList.remove("visible");
+  page.classList.remove("gates-done");
+  page.classList.remove("opening", "ignite");
+
+  brigadesPage.classList.remove("open");
+  masterBoardsPage.classList.remove("open");
+  boardPage.classList.remove("open");
+  if (fabricBoardFrame) {
+    fabricBoardFrame.src = "about:blank";
+  }
+  if (masterPreviewModal) {
+    masterPreviewModal.hidden = true;
+    if (masterPreviewImage) masterPreviewImage.removeAttribute("src");
+  }
+
+  const gateBackdrop = document.getElementById("gate-backdrop");
+  const gateEntry = document.getElementById("gate-entry");
+  if (gateBackdrop) {
+    gateBackdrop.classList.remove("hidden", "opening");
+  }
+  if (gateEntry) {
+    gateEntry.classList.remove("hidden", "opening");
+  }
+
+  const gateUser = document.getElementById("gate-user");
+  const gatePass = document.getElementById("gate-pass");
+  const gateError = document.getElementById("gate-error");
+  if (gateUser) gateUser.value = "";
+  if (gatePass) gatePass.value = "";
+  if (gateError) gateError.textContent = "";
+}
+
+if (form) {
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    errorEl.textContent = "";
+    const username = document.getElementById("user").value.trim();
+    const password = document.getElementById("pass").value;
+    const session = authenticateUser(username, password);
+    if (!session) {
+      errorEl.textContent = "Неверный логин или пароль.";
+      return;
+    }
+    activeSession = session;
+    if (burgerMenu) burgerMenu.style.display = "";
+    if (sidePanel) sidePanel.style.display = "";
+    updateWelcomeHeading();
+    updateNavBoardsLabel();
+    buildBrigadesGrid();
+    void renderMasterBoards();
+    applyRoleToBrigadesPage();
+    updateBoardBackButton();
+    btn.disabled = true;
+    form.classList.add("hidden");
+    page.classList.add("ignite");
+    window.setTimeout(() => page.classList.add("opening"), IGNITE_BEFORE_OPEN_MS);
+    window.setTimeout(() => {
+      page.classList.add("gates-done");
+      realm.classList.add("visible");
+    }, IGNITE_BEFORE_OPEN_MS + GATE_MS + 120);
+  });
+} else {
+  let restored = null;
+  try {
+    const raw = sessionStorage.getItem("ink-auth-session");
+    if (raw) restored = JSON.parse(raw);
+  } catch {}
+  const gatePresent = Boolean(document.getElementById("gate-entry"));
+  const validRestored =
+    restored &&
+    (restored.role === "supervisor" || restored.role === "master");
+
+  if (validRestored) {
+    applyAuthenticatedSession(restored);
+  } else if (gatePresent) {
+    activeSession = null;
+  } else {
+    applyAuthenticatedSession({
+      role: "supervisor",
+      name: "Гуляев Денис Михайлович",
+    });
+  }
+}
+
+window.addEventListener("ink-auth-success", (event) => {
+  applyAuthenticatedSession(event.detail);
 });
 
 burgerIcon.addEventListener("click", () => {
@@ -341,7 +478,7 @@ burgerIcon.addEventListener("click", () => {
   sidePanel.classList.toggle("open");
 });
 
-document.querySelectorAll(".side-panel li").forEach((li) => {
+document.querySelectorAll(".side-panel-nav li").forEach((li) => {
   li.addEventListener("click", () => {
     sidePanel.classList.remove("open");
     burgerIcon.classList.remove("open");
@@ -360,7 +497,7 @@ document.querySelectorAll(".side-panel li").forEach((li) => {
       masterBoardsPage.classList.remove("open");
       if (activeSession.role === "master") {
         setBoardUiMode(true);
-        renderMasterBoards();
+        void renderMasterBoards();
         masterBoardsPage.classList.add("open");
       } else {
         setBoardUiMode(false);
@@ -369,6 +506,15 @@ document.querySelectorAll(".side-panel li").forEach((li) => {
     }
   });
 });
+
+const sidePanelLogout = document.getElementById("side-panel-logout");
+if (sidePanelLogout) {
+  sidePanelLogout.addEventListener("click", () => {
+    sidePanel.classList.remove("open");
+    burgerIcon.classList.remove("open");
+    performLogout();
+  });
+}
 
 document.querySelector(".brigades-back-btn").addEventListener("click", () => {
   brigadesPage.classList.remove("open");
@@ -407,7 +553,7 @@ window.addEventListener("message", (event) => {
         brigadesPage.classList.add("open");
       } else {
         setBoardUiMode(true);
-        renderMasterBoards();
+        void renderMasterBoards();
         masterBoardsPage.classList.add("open");
       }
     });
@@ -444,3 +590,4 @@ window.addEventListener("message", (event) => {
   }
   pendingFabricSaveAction = null;
 });
+

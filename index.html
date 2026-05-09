@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="ru" data-gate-theme="aurora">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -10,10 +10,77 @@
       href="https://fonts.googleapis.com/css2?family=Bad+Script&family=Caveat:wght@400;700&family=Cinzel:wght@500;600&family=Kalam:wght@400;700&family=Marck+Script&family=Neucha&family=Patrick+Hand&family=Source+Sans+3:wght@400;600&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles/main.css" />
+    <link rel="stylesheet" href="styles/main.css?v=20260509-4" />
+    <link rel="stylesheet" href="styles/gate-themes.css?v=20260509-4" />
+    <link rel="stylesheet" href="styles/gate-entry.css?v=20260509-4" />
   </head>
   <body>
     <div class="page" id="page">
+      <main class="gate-entry" id="gate-entry">
+        <div class="gate-backdrop" id="gate-backdrop">
+          <video
+            class="gate-bg-video"
+            id="gate-bg-video"
+            muted
+            loop
+            playsinline
+            preload="metadata"
+            aria-hidden="true"
+          >
+            <source src="assets/gate-background.mp4" type="video/mp4" />
+          </video>
+          <video
+            class="gate-bg-video gate-bg-video-alt"
+            id="gate-bg-video-alt"
+            muted
+            loop
+            playsinline
+            preload="metadata"
+            aria-hidden="true"
+          >
+            <source src="assets/gate-background-3.mp4" type="video/mp4" />
+          </video>
+          <div class="gate-entry-bg"></div>
+          <div class="frost-layer" aria-hidden="true"></div>
+        </div>
+        <button
+          type="button"
+          class="gate-style-toggle"
+          id="gate-style-toggle"
+          aria-label="Сменить стиль экрана входа"
+        >
+          Сменить стиль
+        </button>
+        <div class="gate-wrap" aria-hidden="true">
+          <div class="leaf leaf-left">
+            <span class="eye" aria-hidden="true"></span>
+          </div>
+          <div class="leaf leaf-right">
+            <img
+              class="ink-stamp"
+              src="assets/ink-logo.png"
+              alt=""
+              width="220"
+              height="auto"
+            />
+            <span class="eye" aria-hidden="true"></span>
+          </div>
+        </div>
+        <form class="gate-login" id="gate-login" autocomplete="on" novalidate>
+          <h2>Вход</h2>
+          <div class="field">
+            <label for="gate-user">Логин</label>
+            <input id="gate-user" type="text" autocomplete="username" required />
+          </div>
+          <div class="field">
+            <label for="gate-pass">Пароль</label>
+            <input id="gate-pass" type="password" autocomplete="current-password" required />
+          </div>
+          <p class="error" id="gate-error"></p>
+          <button class="btn" type="submit">Открыть</button>
+        </form>
+      </main>
+
       <div class="burger-menu">
         <div class="burger-icon">
           <span></span>
@@ -22,11 +89,14 @@
         </div>
       </div>
       <div class="side-panel">
-        <ul>
+        <ul class="side-panel-nav">
           <li data-nav="home">Главная</li>
           <li data-nav="boards">Буровые бригады</li>
           <li data-nav="contacts">Контакты</li>
         </ul>
+        <button type="button" class="side-panel-logout" id="side-panel-logout">
+          Выход
+        </button>
       </div>
       <div class="realm" id="realm" aria-live="polite">
         <h1>Добро пожаловать</h1>
@@ -84,57 +154,77 @@
         </div>
       </div>
 
-      <div class="gates-stage">
-        <div class="gates" role="presentation">
-          <div class="gate gate-left" aria-hidden="true"></div>
-          <div class="gate gate-right" aria-hidden="true"></div>
-        </div>
-        <div class="ink-letters-normal" aria-hidden="true">
-          <span>И</span><span>Н</span><span>К</span>
-        </div>
-        <div class="ink-lit-stack" aria-hidden="true">
-          <div class="ink-letters">
-            <span class="ink-ch">И</span><span class="ink-ch">Н</span
-            ><span class="ink-ch">К</span>
-          </div>
-        </div>
-      </div>
-
-      <form class="auth" id="auth" autocomplete="on" novalidate>
-        <h2>Вход</h2>
-        <div class="field">
-          <label for="user">Логин</label>
-          <input
-            id="user"
-            name="username"
-            type="text"
-            autocomplete="username"
-            required
-          />
-        </div>
-        <div class="field">
-          <label for="pass">Пароль</label>
-          <input
-            id="pass"
-            name="password"
-            type="password"
-            autocomplete="current-password"
-            required
-          />
-        </div>
-        <p class="error" id="error" role="alert"></p>
-        <button class="btn" type="submit" id="submit">Открыть</button>
-        <p class="hint">
-          <strong>Начальник</strong>: <code>boss</code> / <code>boss</code> или
-          <code>ink</code> / <code>ink</code> — просмотр всех досок ББ.<br />
-          <strong>Мастер ББ</strong>: логин <code>m1</code>…<code>m30</code>,
-          пароль тот же номер (<code>1</code>…<code>30</code>) — своя оперативка
-          только по своей бригаде.
-        </p>
-      </form>
     </div>
-    <script defer src="scripts/utils.js"></script>
-    <script defer src="scripts/auth.js"></script>
-    <script defer src="scripts/main.js"></script>
+    <svg class="gate-filters" width="0" height="0" aria-hidden="true">
+      <defs>
+        <filter
+          id="gateInkEngrave"
+          x="-15%"
+          y="-15%"
+          width="130%"
+          height="130%"
+          color-interpolation-filters="sRGB"
+        >
+          <feColorMatrix
+            type="matrix"
+            values="
+              1 0 0 0 0
+              0 1 0 0 0
+              0 0 1 0 0
+              -1 -1 -1 2.6 0"
+            result="keyed"
+          />
+          <feColorMatrix
+            in="keyed"
+            type="matrix"
+            values="
+              0.14 0 0 0 0
+              0 0.16 0 0 0
+              0 0 0.12 0 0
+              0 0 0 1 0"
+            result="dark"
+          />
+          <feGaussianBlur in="keyed" stdDeviation="1.4" result="blur" />
+          <feSpecularLighting
+            in="blur"
+            surfaceScale="-4"
+            specularConstant="0.85"
+            specularExponent="22"
+            lighting-color="#ffd9a0"
+            result="spec"
+          >
+            <feDistantLight azimuth="135" elevation="55" />
+          </feSpecularLighting>
+          <feComposite in="spec" in2="keyed" operator="in" result="specMasked" />
+          <feComposite
+            in="specMasked"
+            in2="dark"
+            operator="arithmetic"
+            k1="0"
+            k2="1"
+            k3="1"
+            k4="0"
+            result="engraved"
+          />
+          <feGaussianBlur in="keyed" stdDeviation="2" result="blurShadow" />
+          <feSpecularLighting
+            in="blurShadow"
+            surfaceScale="3"
+            specularConstant="0.4"
+            specularExponent="18"
+            lighting-color="#000000"
+            result="darkRim"
+          >
+            <feDistantLight azimuth="315" elevation="40" />
+          </feSpecularLighting>
+          <feComposite in="darkRim" in2="keyed" operator="in" result="darkRimMasked" />
+          <feBlend in="engraved" in2="darkRimMasked" mode="multiply" />
+        </filter>
+      </defs>
+    </svg>
+    <script defer src="scripts/utils.js?v=20260509-4"></script>
+    <script defer src="scripts/auth.js?v=20260509-4"></script>
+    <script defer src="scripts/main.js?v=20260509-4"></script>
+    <script defer src="scripts/gate-entry.js?v=20260509-4"></script>
   </body>
 </html>

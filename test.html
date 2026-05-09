@@ -132,6 +132,19 @@
         font-size: 12px;
       }
 
+      .save-status {
+        min-width: 180px;
+        text-align: right;
+      }
+
+      .save-status.ok {
+        color: #86efac;
+      }
+
+      .save-status.warn {
+        color: #fca5a5;
+      }
+
       .label {
         font-size: 13px;
         color: var(--label-text);
@@ -332,6 +345,8 @@
           <button id="action-bookmark">☆ Добавить в закладки</button>
           <button id="action-exit">💾 Сохранить и выйти</button>
           <button id="action-fullscreen">⛶ Полный экран</button>
+          <span id="save-status" class="hint save-status">Сохранение: ожидание</span>
+          <span id="preview-status" class="hint save-status">Предпросмотр: без обновления</span>
           <span class="hint">Панорамирование: удерживай пробел + drag</span>
         </div>
       </div>
@@ -363,7 +378,10 @@
       const boardStorageKey = `ink-auth-fabric-bb-${boardBb}-${boardId}`;
       const boardThumbKey = `ink-auth-fabric-thumb-bb-${boardBb}-${boardId}`;
       const boardPreviewKey = `ink-auth-fabric-preview-bb-${boardBb}-${boardId}`;
-      const PREVIEW_EXPORT_MULTIPLIER = 6;
+      const PREVIEW_EXPORT_MULTIPLIER = 2;
+      const API_BASE = "/api";
+      const SAVE_TIMEOUT_MS = 12000;
+      let remoteSaveTimer = null;
 
       const canvas = new fabric.Canvas("drawing-canvas", {
         backgroundColor: "#ffffff",
@@ -380,6 +398,8 @@
       const actionBookmarkBtn = document.getElementById("action-bookmark");
       const actionExitBtn = document.getElementById("action-exit");
       const actionFullscreenBtn = document.getElementById("action-fullscreen");
+      const saveStatus = document.getElementById("save-status");
+      const previewStatus = document.getElementById("preview-status");
       const colorPicker = document.getElementById("color-picker");
       const brushSize = document.getElementById("brush-size");
       const brushSizeLabel = document.getElementById("brush-size-label");
@@ -1076,6 +1096,20 @@
         });
       }
 
+      function setSaveStatus(text, kind = "") {
+        if (!saveStatus) return;
+        saveStatus.textContent = text;
+        saveStatus.classList.remove("ok", "warn");
+        if (kind) saveStatus.classList.add(kind);
+      }
+
+      function setPreviewStatus(text, kind = "") {
+        if (!previewStatus) return;
+        previewStatus.textContent = text;
+        previewStatus.classList.remove("ok", "warn");
+        if (kind) previewStatus.classList.add(kind);
+      }
+
       function setActiveButton(mode) {
         Object.entries(tools).forEach(([key, btn]) => {
           btn.classList.toggle("active", key === mode);
@@ -1302,12 +1336,91 @@
         updateLayersPanel();
       });
 
+      async function saveBoardStateToServer(snapshot, thumb, preview) {
+        const controller = new AbortController();
+        const timeout = window.setTimeout(() => controller.abort(), SAVE_TIMEOUT_MS);
+        const payload = {
+          snapshot,
+          thumb
+        };
+        if (typeof preview === "string") {
+          payload.preview = preview;
+        }
+        let response;
+        try {
+          response = await fetch(`${API_BASE}/board-state/${boardBb}/${boardId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+            signal: controller.signal
+          });
+        } finally {
+          window.clearTimeout(timeout);
+        }
+        if (!response.ok) throw new Error("Cannot save board state to server");
+      }
+
+      async function loadBoardStateFromServer() {
+        const response = await fetch(`${API_BASE}/board-state/${boardBb}/${boardId}`);
+        if (!response.ok) throw new Error("Cannot load board state from server");
+        const payload = await response.json();
+        return payload?.found ? payload : null;
+      }
+
+      async function sendRemoteState({ retries = 1 }) {
+        const snapshot = localStorage.getItem(boardStorageKey);
+        if (!snapshot) return true;
+        const thumb = localStorage.getItem(boardThumbKey);
+        const preview = localStorage.getItem(boardPreviewKey);
+        for (let attempt = 1; attempt <= retries + 1; attempt += 1) {
+          try {
+            setSaveStatus("Сохранение: отправка...", "");
+            await saveBoardStateToServer(snapshot, thumb, preview);
+            setSaveStatus("Сохранение: в базе", "ok");
+            return true;
+          } catch {
+            if (attempt > retries) {
+              setSaveStatus("Сохранение: ошибка сети", "warn");
+              return false;
+            }
+            await new Promise((resolve) => window.setTimeout(resolve, 500 * attempt));
+          }
+        }
+        return false;
+      }
+
+      function scheduleRemoteSave() {
+        if (remoteSaveTimer) window.clearTimeout(remoteSaveTimer);
+        remoteSaveTimer = window.setTimeout(() => {
+          remoteSaveTimer = null;
+          void sendRemoteState({ retries: 0 });
+        }, 700);
+      }
+
+      async function flushRemoteSaveNow() {
+        if (remoteSaveTimer) {
+          window.clearTimeout(remoteSaveTimer);
+          remoteSaveTimer = null;
+        }
+        return sendRemoteState({ retries: 2 });
+      }
+
       function persistBoardState(cropOverride = null) {
         localStorage.setItem(boardStorageKey, getProjectJSON());
         saveBoardThumbnail(cropOverride);
+        scheduleRemoteSave();
       }
 
-      function loadBoardState() {
+      async function loadBoardState() {
+        try {
+          const remote = await loadBoardStateFromServer();
+          if (remote?.snapshot) {
+            localStorage.setItem(boardStorageKey, remote.snapshot);
+            if (typeof remote.thumb === "string") localStorage.setItem(boardThumbKey, remote.thumb);
+            if (typeof remote.preview === "string") localStorage.setItem(boardPreviewKey, remote.preview);
+          }
+        } catch {}
+
         const saved = localStorage.getItem(boardStorageKey);
         if (!saved) {
           saveHistorySnapshot();
@@ -1343,6 +1456,7 @@
 
       function pickSaveArea() {
         return new Promise((resolve) => {
+          setPreviewStatus("Предпросмотр: выделите область...", "");
           state.saveCropMode = true;
           state.pendingCropResolve = resolve;
           state.saveCropRect = null;
@@ -1370,6 +1484,11 @@
         }
         const resolve = state.pendingCropResolve;
         state.pendingCropResolve = null;
+        if (!crop) {
+          setPreviewStatus("Предпросмотр: выбор отменён", "warn");
+        } else {
+          setPreviewStatus("Предпросмотр: область выбрана", "");
+        }
         if (resolve) resolve(crop);
       }
 
@@ -1385,6 +1504,16 @@
         }
         await new Promise((resolve) => requestAnimationFrame(resolve));
         persistBoardState(crop);
+        const savedOk = await flushRemoteSaveNow();
+        if (!savedOk) {
+          alert("Не удалось сохранить на сервер. Проверьте сеть и повторите.");
+          return;
+        }
+        if (chooseArea && crop) {
+          setPreviewStatus("Предпросмотр: сохранён в базе", "ok");
+        } else if (chooseArea && !crop) {
+          setPreviewStatus("Предпросмотр: без изменений", "");
+        }
         window.parent.postMessage({ type: "fabric-save-done" }, "*");
       }
 
@@ -1783,12 +1912,13 @@
       applyTheme(savedTheme || "dark");
       resizeCanvas();
       setMode("select");
-      loadBoardState();
-      applyReadonlyMode();
-      updateLayersPanel();
-      updateTextSizeControl();
-      setLayersVisible(true);
-      syncFullscreenLabel();
+      loadBoardState().finally(() => {
+        applyReadonlyMode();
+        updateLayersPanel();
+        updateTextSizeControl();
+        setLayersVisible(true);
+        syncFullscreenLabel();
+      });
     </script>
   </body>
 </html>
