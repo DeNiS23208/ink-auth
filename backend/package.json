@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "seed:company-template": "node scripts/seed-company-template.mjs"
   },
   "dependencies": {
     "express": "^4.21.2",
