@@ -1,0 +1,9 @@
+{
+  "name": "ink-auth",
+  "private": true,
+  "description": "ИНК: статика + Express API. Требуется PostgreSQL (см. backend).",
+  "scripts": {
+    "start": "npm --prefix backend start",
+    "server": "npm --prefix backend start"
+  }
+}

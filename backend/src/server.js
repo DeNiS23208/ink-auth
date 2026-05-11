@@ -28,6 +28,21 @@ async function ensureBbShowcaseTable() {
   `);
 }
 
+async function ensureBoardCommentsTable() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS board_comments (
+      id BIGSERIAL PRIMARY KEY,
+      bb INTEGER NOT NULL,
+      board_id TEXT NOT NULL,
+      author_name TEXT NOT NULL,
+      body TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS board_comments_board_idx
+      ON board_comments (bb, board_id, created_at DESC);
+  `);
+}
+
 function parseBb(value) {
   const bb = Number(value);
   return Number.isInteger(bb) && bb > 0 ? bb : null;
@@ -281,6 +296,62 @@ app.delete("/api/showcase/:bb", async (req, res) => {
   }
 });
 
+app.get("/api/board-comments/:bb/:boardId", async (req, res) => {
+  const bb = parseBb(req.params.bb);
+  const boardId = String(req.params.boardId || "").trim();
+  if (!bb || !boardId) return res.status(400).json({ error: "Invalid board identity" });
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, author_name AS "authorName", body, created_at AS "createdAt"
+       FROM board_comments
+       WHERE bb = $1 AND board_id = $2
+       ORDER BY created_at DESC
+       LIMIT 200`,
+      [bb, boardId],
+    );
+    res.json({ comments: rows });
+  } catch (error) {
+    res.status(500).json({ error: String(error?.message || error) });
+  }
+});
+
+app.post("/api/board-comments/:bb/:boardId", async (req, res) => {
+  const bb = parseBb(req.params.bb);
+  const boardId = String(req.params.boardId || "").trim();
+  if (!bb || !boardId) return res.status(400).json({ error: "Invalid board identity" });
+  const authorName = String(req.body?.authorName || "").trim().slice(0, 140);
+  const body = String(req.body?.body || "").trim().slice(0, 1500);
+  if (!authorName) return res.status(400).json({ error: "authorName is required" });
+  if (!body) return res.status(400).json({ error: "body is required" });
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO board_comments (bb, board_id, author_name, body, created_at)
+       VALUES ($1, $2, $3, $4, NOW())
+       RETURNING id, author_name AS "authorName", body, created_at AS "createdAt"`,
+      [bb, boardId, authorName, body],
+    );
+    res.json({ ok: true, comment: rows[0] || null });
+  } catch (error) {
+    res.status(500).json({ error: String(error?.message || error) });
+  }
+});
+
+app.get("/api/board-comments-summary", async (_req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT bb::int AS bb,
+              board_id AS "boardId",
+              COUNT(*)::int AS count,
+              MAX(created_at) AS "latestAt"
+       FROM board_comments
+       GROUP BY bb, board_id`,
+    );
+    res.json({ items: rows });
+  } catch (error) {
+    res.status(500).json({ error: String(error?.message || error) });
+  }
+});
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const staticRoot = path.resolve(__dirname, "..", "..");
 if (fs.existsSync(path.join(staticRoot, "index.html"))) {
@@ -289,9 +360,22 @@ if (fs.existsSync(path.join(staticRoot, "index.html"))) {
 
 async function start() {
   await ensureBbShowcaseTable();
-  app.listen(PORT, () => {
+  await ensureBoardCommentsTable();
+  const server = app.listen(PORT, () => {
     // eslint-disable-next-line no-console
     console.log(`Backend listening on :${PORT}`);
+    // eslint-disable-next-line no-console
+    console.log(`INK API: GET/PUT/DELETE /api/showcase/:bb (мастер — «на показ»)`);
+  });
+  server.on("error", (err) => {
+    if (err && err.code === "EADDRINUSE") {
+      // eslint-disable-next-line no-console
+      console.error(
+        `Порт ${PORT} уже занят другим процессом (часто — старый node или http-server без API). Остановите его или задайте переменную PORT другому значению, затем снова запустите backend.`,
+      );
+      process.exit(1);
+    }
+    throw err;
   });
 }
 

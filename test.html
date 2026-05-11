@@ -94,6 +94,7 @@
         flex: 1 1 auto !important;
       }
 
+      #action-back,
       #action-bookmark,
       #action-exit,
       #action-fullscreen {
@@ -342,6 +343,7 @@
           <button id="theme-toggle" title="Переключить тему">☀️</button>
           <button id="toggle-layers">Скрыть слои</button>
           <span class="toolbar-spacer"></span>
+          <button id="action-back">← Назад</button>
           <button id="action-bookmark">☆ Добавить в закладки</button>
           <button id="action-exit">💾 Сохранить и выйти</button>
           <button id="action-fullscreen">⛶ Полный экран</button>
@@ -395,6 +397,7 @@
       const layersPanel = document.querySelector(".layers-panel");
       const toggleLayersBtn = document.getElementById("toggle-layers");
       const floatingFullscreenExitBtn = document.getElementById("floating-fullscreen-exit");
+      const actionBackBtn = document.getElementById("action-back");
       const actionBookmarkBtn = document.getElementById("action-bookmark");
       const actionExitBtn = document.getElementById("action-exit");
       const actionFullscreenBtn = document.getElementById("action-fullscreen");
@@ -828,6 +831,9 @@
           canvas.renderAll();
           updateLayersPanel();
           state.isHistoryBusy = false;
+          // После загрузки снимка с сервера в БД могли не быть thumb/preview — пересчитываем и шлём на API.
+          saveBoardThumbnail();
+          scheduleRemoteSave();
         });
       }
 
@@ -1296,6 +1302,11 @@
           window.parent.postMessage({ type: "fabric-bookmark-request" }, "*");
         });
       }
+      if (actionBackBtn) {
+        actionBackBtn.addEventListener("click", () => {
+          window.parent.postMessage({ type: "fabric-back-request" }, "*");
+        });
+      }
       if (actionExitBtn) {
         actionExitBtn.addEventListener("click", () => {
           window.parent.postMessage({ type: "fabric-exit-request" }, "*");
@@ -1434,9 +1445,14 @@
 
       function applyReadonlyMode() {
         if (!isReadOnly) return;
+        if (actionExitBtn) {
+          actionExitBtn.textContent = "↩ Выйти";
+          actionExitBtn.title = "Вернуться без сохранения";
+        }
         document.querySelectorAll("button, input, select").forEach((el) => {
           if (
             el.id === "theme-toggle" ||
+            el.id === "action-back" ||
             el.id === "action-exit" ||
             el.id === "action-fullscreen"
           ) {
@@ -1527,6 +1543,19 @@
               actionBookmarkBtn.textContent = base;
             }, 1300);
           }
+          return;
+        }
+        if (event.data.type === "fabric-thumb-for-showcase-request") {
+          try {
+            saveBoardThumbnail();
+          } catch (_) {}
+          const thumb = localStorage.getItem(boardThumbKey);
+          const preview = localStorage.getItem(boardPreviewKey);
+          window.parent.postMessage(
+            { type: "fabric-thumb-for-showcase-done", thumb, preview },
+            "*",
+          );
+          void flushRemoteSaveNow();
           return;
         }
         if (event.data.type !== "fabric-save-request") return;

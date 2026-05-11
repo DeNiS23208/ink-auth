@@ -28,10 +28,22 @@ const supervisorShowcaseClose = document.getElementById("supervisor-showcase-clo
 const supervisorShowcaseTitle = document.getElementById("supervisor-showcase-title");
 const supervisorShowcaseImage = document.getElementById("supervisor-showcase-image");
 const supervisorShowcaseOpenFabric = document.getElementById("supervisor-showcase-open-fabric");
+const supervisorReviewPage = document.getElementById("supervisor-review-page");
+const supervisorReviewBackBtn = document.getElementById("supervisor-review-back-btn");
+const supervisorReviewTitle = document.getElementById("supervisor-review-title");
+const supervisorReviewImage = document.getElementById("supervisor-review-image");
+const supervisorReviewImageEmpty = document.getElementById("supervisor-review-image-empty");
+const supervisorCommentsList = document.getElementById("supervisor-comments-list");
+const supervisorCommentsForm = document.getElementById("supervisor-comments-form");
+const supervisorCommentInput = document.getElementById("supervisor-comment-input");
+const supervisorCommentSubmit = document.getElementById("supervisor-comment-submit");
+const supervisorCommentsStatus = document.getElementById("supervisor-comments-status");
 
 let supervisorModalBb = null;
 let supervisorModalBoardId = "board-1";
 let supervisorModalBoardName = "Шаблон 1";
+let supervisorReviewBb = null;
+let supervisorReviewBoardId = "board-1";
 
 const GATE_MS = 1350;
 const IGNITE_BEFORE_OPEN_MS = window.matchMedia("(prefers-reduced-motion: reduce)").matches
@@ -46,7 +58,9 @@ let currentOpenBoardName = "Шаблон 1";
 let pendingFabricSaveAction = null;
 const MASTER_BOARDS_PREFIX = "ink-auth-master-boards-";
 const BOOKMARKS_KEY = "ink-auth-board-bookmarks";
+const COMMENT_SEEN_PREFIX = "ink-auth-comment-seen-";
 const API_BASE = "/api";
+const commentSummaryMap = new Map();
 
 if (burgerMenu) burgerMenu.style.display = "none";
 if (sidePanel) sidePanel.style.display = "none";
@@ -55,7 +69,7 @@ if (realm?.querySelector("h1")) wrapLetters(realm.querySelector("h1"));
 if (realm?.querySelectorAll("h1")[1]) wrapLetters(realm.querySelectorAll("h1")[1]);
 
 function canEditBoard() {
-  return activeSession?.role === "master";
+  return activeSession?.role === "master" || activeSession?.role === "supervisor";
 }
 
 function updateNavBoardsLabel() {
@@ -92,6 +106,15 @@ function setBoardUiMode(active) {
 
 function getMasterBoardsKey(bb) {
   return `${MASTER_BOARDS_PREFIX}${bb}`;
+}
+
+function getCommentBoardKey(bb, boardId) {
+  return `${bb}:${boardId}`;
+}
+
+function getCommentSeenStorageKey(bb, boardId) {
+  const actor = activeSession?.name || activeSession?.role || "anonymous";
+  return `${COMMENT_SEEN_PREFIX}${actor}:${bb}:${boardId}`;
 }
 
 async function fetchMasterBoardsFromServer(bb) {
@@ -226,10 +249,7 @@ function renameMasterBoard(bb, boardId, newName) {
     boardPage?.classList.contains("open")
   ) {
     currentOpenBoardName = trimmed;
-    const viewOnly = activeSession?.role === "supervisor";
-    boardTitle.textContent = viewOnly
-      ? `Оперативная доска — ББ ${bb} • ${trimmed} (просмотр)`
-      : `Оперативная доска — ББ ${bb} • ${trimmed}`;
+    boardTitle.textContent = `Оперативная доска — ББ ${bb} • ${trimmed}`;
   }
 
   return true;
@@ -251,25 +271,93 @@ async function pickBestPreviewDataUrl(bb, boardId) {
   return parts.reduce((a, b) => (b.length > a.length ? b : a));
 }
 
-async function putMasterShowcaseBoard(bb, boardId) {
-  const imageDataUrl = await pickBestPreviewDataUrl(bb, boardId);
-  const res = await fetch(`${API_BASE}/showcase/${bb}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      boardId,
-      ...(imageDataUrl ? { imageDataUrl } : {}),
-    }),
+function requestThumbFromOpenFabric(bb, boardId) {
+  if (currentOpenBb !== bb || currentOpenBoardId !== boardId) return Promise.resolve(false);
+  const w = fabricBoardFrame?.contentWindow;
+  if (!w) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    const timeoutMs = 4000;
+    let settled = false;
+    const timer = window.setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      window.removeEventListener("message", onMsg);
+      resolve(false);
+    }, timeoutMs);
+    function onMsg(event) {
+      if (event.data?.type !== "fabric-thumb-for-showcase-done") return;
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      window.removeEventListener("message", onMsg);
+      resolve(true);
+    }
+    window.addEventListener("message", onMsg);
+    try {
+      w.postMessage({ type: "fabric-thumb-for-showcase-request" }, "*");
+    } catch {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      window.removeEventListener("message", onMsg);
+      resolve(false);
+    }
   });
-  let msg = "";
+}
+
+async function putMasterShowcaseBoard(bb, boardId) {
+  let imageDataUrl = await pickBestPreviewDataUrl(bb, boardId);
+  if (!imageDataUrl) {
+    await requestThumbFromOpenFabric(bb, boardId);
+    imageDataUrl = await pickBestPreviewDataUrl(bb, boardId);
+  }
+  let res;
   try {
-    const j = await res.json();
-    msg = j.error || "";
+    res = await fetch(`${API_BASE}/showcase/${bb}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        boardId,
+        ...(imageDataUrl ? { imageDataUrl } : {}),
+      }),
+    });
+  } catch (err) {
+    window.alert(
+      `Нет связи с сервером (${String(err?.message || err)}). Проверьте, что backend запущен и страница открыта с того же адреса.`,
+    );
+    return;
+  }
+  let msg = "";
+  let bodyText = "";
+  try {
+    bodyText = await res.text();
+    if (bodyText) {
+      try {
+        const j = JSON.parse(bodyText);
+        msg = (j && (j.error || j.message)) || "";
+      } catch {
+        msg = bodyText.slice(0, 220);
+      }
+    }
   } catch {}
   if (!res.ok) {
+    const looksLikeMissingApiRoute =
+      /cannot\s+(put|get|post|delete)\s+\/api\//i.test(bodyText) ||
+      /<pre>\s*cannot\s+put\s+\/api\//i.test(bodyText) ||
+      (bodyText.includes("<!DOCTYPE") && /cannot\s+put/i.test(bodyText));
+    const wrongServerHint =
+      "На порту 3000 запущен не тот процесс: нет маршрута PUT /api/showcase (часто — старый node или http-server без API).\n\n" +
+      "Сделайте так:\n" +
+      "1) Закройте окна, где уже что‑то слушает порт 3000.\n" +
+      "2) Запустите backend ИНК одним из способов:\n" +
+      "   • двойной щелчок по файлу Start-Ink.cmd в папке ink-auth\n" +
+      "   • или в ink-auth: npm start\n" +
+      "   • или PowerShell: .\\scripts\\start-local-backend.ps1\n" +
+      "3) В консоли должны быть строки «Backend listening» и «INK API: GET/PUT/DELETE /api/showcase».\n" +
+      "4) Откройте снова http://127.0.0.1:3000/";
     window.alert(
-      msg ||
-        "Не удалось поставить на показ. Сохраните шаблон и при выходе выделите область для превью.",
+      looksLikeMissingApiRoute ? wrongServerHint : msg ||
+        "Не удалось поставить на показ. Откройте эту доску (чтобы сгенерировалось превью), затем снова нажмите «Поставить на показ» или выйдите с доски с выделением области превью.",
     );
     return;
   }
@@ -287,6 +375,60 @@ async function fetchShowcaseBoardIdForBb(bb) {
   }
 }
 
+function getSeenCommentCount(bb, boardId) {
+  const raw = localStorage.getItem(getCommentSeenStorageKey(bb, boardId));
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+}
+
+function setSeenCommentCount(bb, boardId, count) {
+  localStorage.setItem(getCommentSeenStorageKey(bb, boardId), String(Math.max(0, Number(count) || 0)));
+}
+
+function getCommentCountFromSummary(bb, boardId) {
+  return commentSummaryMap.get(getCommentBoardKey(bb, boardId)) || 0;
+}
+
+function getUnreadCommentCount(bb, boardId) {
+  const total = getCommentCountFromSummary(bb, boardId);
+  const seen = getSeenCommentCount(bb, boardId);
+  return Math.max(0, total - seen);
+}
+
+function attachCommentBadge(button, unreadCount) {
+  if (!button) return;
+  let badge = button.querySelector(".comment-badge");
+  if (!badge) {
+    badge = document.createElement("span");
+    badge.className = "comment-badge";
+    button.appendChild(badge);
+  }
+  if (unreadCount > 0) {
+    badge.hidden = false;
+    badge.textContent = unreadCount > 99 ? "99+" : String(unreadCount);
+  } else {
+    badge.hidden = true;
+    badge.textContent = "";
+  }
+}
+
+async function refreshCommentSummary() {
+  commentSummaryMap.clear();
+  try {
+    const r = await fetch(`${API_BASE}/board-comments-summary`);
+    if (!r.ok) return;
+    const payload = await r.json();
+    const items = Array.isArray(payload?.items) ? payload.items : [];
+    items.forEach((item) => {
+      const bb = Number(item?.bb);
+      const boardId = String(item?.boardId || "").trim();
+      const count = Number(item?.count || 0);
+      if (!Number.isInteger(bb) || bb <= 0 || !boardId) return;
+      commentSummaryMap.set(getCommentBoardKey(bb, boardId), Math.max(0, count));
+    });
+  } catch {}
+}
+
 function promptRenameMasterBoard(board) {
   if (!activeSession || activeSession.role !== "master") return;
   const next = window.prompt("Новое имя шаблона", board.name);
@@ -301,6 +443,7 @@ function promptRenameMasterBoard(board) {
 async function renderMasterBoards() {
   if (!activeSession || activeSession.role !== "master") return;
   masterBoardsGrid.replaceChildren();
+  await refreshCommentSummary();
   const boards = await syncMasterBoardsFromServer(activeSession.bb);
   // Синхронизируем превью из БД в localStorage, чтобы карточки досок
   // отображались одинаково на любых ноутбуках/браузерах.
@@ -327,9 +470,11 @@ async function renderMasterBoards() {
     if (showcaseBoardId && board.id === showcaseBoardId) {
       item.classList.add("master-template-item--showcase");
     }
-    const cube = document.createElement("button");
-    cube.type = "button";
+    const cube = document.createElement("div");
     cube.className = "master-template-cube master-board-cube";
+    cube.tabIndex = 0;
+    cube.setAttribute("role", "button");
+    cube.setAttribute("aria-label", `Открыть шаблон «${board.name}»`);
     const thumb = localStorage.getItem(getMasterBoardThumbKey(activeSession.bb, board.id));
     if (thumb) {
       cube.style.backgroundImage = `url("${thumb}")`;
@@ -340,9 +485,19 @@ async function renderMasterBoards() {
     } else {
       cube.textContent = "Доска";
     }
-    cube.addEventListener("click", () => {
+    const openThisBoard = () => {
       currentMasterBoardId = board.id;
       openBoard(activeSession.bb, board.id, board.name);
+    };
+    cube.addEventListener("click", (e) => {
+      if (e.target !== cube) return;
+      openThisBoard();
+    });
+    cube.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        openThisBoard();
+      }
     });
     const actions = document.createElement("div");
     actions.className = "master-template-actions";
@@ -375,8 +530,28 @@ async function renderMasterBoards() {
     showcaseBtn.textContent = "Поставить на показ";
     showcaseBtn.addEventListener("click", async (e) => {
       e.stopPropagation();
-      await putMasterShowcaseBoard(activeSession.bb, board.id);
-      void renderMasterBoards();
+      if (showcaseBtn.disabled) return;
+      showcaseBtn.disabled = true;
+      try {
+        await putMasterShowcaseBoard(activeSession.bb, board.id);
+        void renderMasterBoards();
+      } finally {
+        showcaseBtn.disabled = false;
+      }
+    });
+    const commentBtn = document.createElement("button");
+    commentBtn.type = "button";
+    commentBtn.className = "master-template-action-btn master-template-action-btn--comment";
+    commentBtn.textContent = "Комментарии";
+    attachCommentBadge(commentBtn, getUnreadCommentCount(activeSession.bb, board.id));
+    commentBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const imageDataUrl = await pickBestPreviewDataUrl(activeSession.bb, board.id);
+      openSupervisorReviewPage(activeSession.bb, {
+        boardId: board.id,
+        boardName: board.name,
+        image: imageDataUrl,
+      });
     });
     const renameMenuBtn = document.createElement("button");
     renameMenuBtn.type = "button";
@@ -399,6 +574,7 @@ async function renderMasterBoards() {
     });
     actions.appendChild(openBtn);
     actions.appendChild(previewBtn);
+    actions.appendChild(commentBtn);
     actions.appendChild(showcaseBtn);
     actions.appendChild(renameMenuBtn);
     actions.appendChild(deleteBtn);
@@ -447,6 +623,7 @@ async function buildBrigadesGrid() {
   brigadesGrid.replaceChildren();
   if (!activeSession || activeSession.role !== "supervisor") return;
   if (brigadesPageHint) brigadesPageHint.style.display = "";
+  await refreshCommentSummary();
   let rows = [];
   try {
     const res = await fetch(`${API_BASE}/showcase-boards`);
@@ -500,14 +677,23 @@ async function buildBrigadesGrid() {
     const openEdit = document.createElement("button");
     openEdit.type = "button";
     openEdit.className = "supervisor-bb-card-open";
-    openEdit.textContent = "Открыть в редакторе (просмотр)";
+    openEdit.textContent = "Открыть в редакторе";
     openEdit.addEventListener("click", () => {
       openBoard(i, row.boardId || "board-1", row.boardName || "Шаблон 1");
+    });
+    const commentBtn = document.createElement("button");
+    commentBtn.type = "button";
+    commentBtn.className = "supervisor-bb-card-comment";
+    commentBtn.textContent = "Оставить комментарий";
+    attachCommentBadge(commentBtn, getUnreadCommentCount(i, row.boardId || "board-1"));
+    commentBtn.addEventListener("click", () => {
+      openSupervisorReviewPage(i, row);
     });
     card.appendChild(label);
     card.appendChild(previewWrap);
     card.appendChild(sub);
     card.appendChild(openEdit);
+    card.appendChild(commentBtn);
     brigadesGrid.appendChild(card);
   }
 }
@@ -529,25 +715,144 @@ function setBoardEditable(editable) {
   if (wbReadOnlyBanner) wbReadOnlyBanner.hidden = editable;
 }
 
+function formatCommentDate(value) {
+  if (!value) return "";
+  const dt = new Date(value);
+  if (Number.isNaN(dt.getTime())) return "";
+  return dt.toLocaleString("ru-RU");
+}
+
+function renderSupervisorComments(comments = []) {
+  if (!supervisorCommentsList) return;
+  supervisorCommentsList.replaceChildren();
+  if (!comments.length) {
+    const empty = document.createElement("p");
+    empty.className = "supervisor-comments-empty";
+    empty.textContent = "Комментариев пока нет.";
+    supervisorCommentsList.appendChild(empty);
+    return;
+  }
+  comments.forEach((comment) => {
+    const item = document.createElement("article");
+    item.className = "supervisor-comment-item";
+    const meta = document.createElement("div");
+    meta.className = "supervisor-comment-item-meta";
+    const author = document.createElement("strong");
+    author.textContent = comment.authorName || "Начальник";
+    const ts = document.createElement("span");
+    ts.textContent = formatCommentDate(comment.createdAt);
+    meta.appendChild(author);
+    meta.appendChild(ts);
+    const text = document.createElement("p");
+    text.className = "supervisor-comment-item-text";
+    text.textContent = comment.body || "";
+    item.appendChild(meta);
+    item.appendChild(text);
+    supervisorCommentsList.appendChild(item);
+  });
+}
+
+function setSupervisorCommentsStatus(text) {
+  if (!supervisorCommentsStatus) return;
+  supervisorCommentsStatus.textContent = text || "";
+}
+
+async function loadSupervisorComments(bb, boardId) {
+  if (!supervisorReviewPage || !activeSession) return;
+  setSupervisorCommentsStatus("Загрузка комментариев...");
+  try {
+    const r = await fetch(`${API_BASE}/board-comments/${bb}/${encodeURIComponent(boardId)}`);
+    if (!r.ok) throw new Error("Cannot load comments");
+    const payload = await r.json();
+    const comments = Array.isArray(payload?.comments) ? payload.comments : [];
+    renderSupervisorComments(comments);
+    const total = comments.length;
+    setSeenCommentCount(bb, boardId, total);
+    commentSummaryMap.set(getCommentBoardKey(bb, boardId), total);
+    setSupervisorCommentsStatus("");
+    if (activeSession?.role === "supervisor") {
+      void buildBrigadesGrid();
+    } else if (activeSession?.role === "master") {
+      void renderMasterBoards();
+    }
+    return comments;
+  } catch {
+    renderSupervisorComments([]);
+    setSupervisorCommentsStatus("Не удалось загрузить комментарии.");
+    return [];
+  }
+}
+
+function openSupervisorReviewPage(bb, row = {}) {
+  if (!supervisorReviewPage || !activeSession) return;
+  supervisorReviewBb = bb;
+  supervisorReviewBoardId = row.boardId || "board-1";
+  if (supervisorReviewTitle) {
+    const boardName = row.boardName || supervisorReviewBoardId || "Шаблон";
+    supervisorReviewTitle.textContent = `ББ ${bb} — ${boardName}`;
+  }
+  if (supervisorReviewImage && row.image) {
+    supervisorReviewImage.src = row.image;
+    supervisorReviewImage.hidden = false;
+    if (supervisorReviewImageEmpty) supervisorReviewImageEmpty.hidden = true;
+  } else {
+    if (supervisorReviewImage) {
+      supervisorReviewImage.hidden = true;
+      supervisorReviewImage.removeAttribute("src");
+    }
+    if (supervisorReviewImageEmpty) supervisorReviewImageEmpty.hidden = false;
+  }
+  if (supervisorCommentInput) supervisorCommentInput.value = "";
+  if (supervisorCommentsForm) {
+    supervisorCommentsForm.hidden = false;
+  }
+  renderSupervisorComments([]);
+  setSupervisorCommentsStatus("");
+  void loadSupervisorComments(supervisorReviewBb, supervisorReviewBoardId);
+  brigadesPage.classList.remove("open");
+  masterBoardsPage.classList.remove("open");
+  boardPage.classList.remove("open");
+  supervisorReviewPage.classList.add("open");
+}
+
+function closeSupervisorReviewPage() {
+  if (!supervisorReviewPage) return;
+  supervisorReviewPage.classList.remove("open");
+  if (supervisorReviewImage) {
+    supervisorReviewImage.hidden = true;
+    supervisorReviewImage.removeAttribute("src");
+  }
+  if (supervisorReviewImageEmpty) supervisorReviewImageEmpty.hidden = false;
+  supervisorReviewBb = null;
+  supervisorReviewBoardId = "board-1";
+  setSupervisorCommentsStatus("");
+  renderSupervisorComments([]);
+  if (activeSession?.role === "master") {
+    masterBoardsPage.classList.add("open");
+    setBoardUiMode(true);
+  } else if (activeSession?.role === "supervisor") {
+    brigadesPage.classList.add("open");
+    setBoardUiMode(false);
+  }
+}
+
 function openBoard(bb, boardId = "board-1", boardName = "Шаблон 1") {
   currentOpenBb = bb;
   currentOpenBoardId = boardId;
   currentOpenBoardName = boardName;
   updateBoardBackButton();
   setBoardEditable(canEditBoard());
-  const viewOnly = activeSession?.role === "supervisor";
-  boardTitle.textContent = viewOnly
-    ? `Оперативная доска — ББ ${bb} • ${boardName} (просмотр)`
-    : `Оперативная доска — ББ ${bb} • ${boardName}`;
+  boardTitle.textContent = `Оперативная доска — ББ ${bb} • ${boardName}`;
   const params = new URLSearchParams({
     bb: String(bb),
     board: boardId,
     readonly: canEditBoard() ? "0" : "1",
-    v: "20260511-1",
+    v: "20260511-8",
   });
   fabricBoardFrame.src = `test.html?${params.toString()}`;
   setBoardUiMode(true);
   brigadesPage.classList.remove("open");
+  if (supervisorReviewPage) supervisorReviewPage.classList.remove("open");
   masterBoardsPage.classList.remove("open");
   boardPage.classList.add("open");
 }
@@ -566,6 +871,20 @@ function requestFabricSave(options = {}, onDone = null) {
     },
     "*",
   );
+}
+
+function closeBoardToPreviousScreen() {
+  boardPage.classList.remove("open");
+  fabricBoardFrame.src = "about:blank";
+  if (activeSession?.role === "supervisor") {
+    setBoardUiMode(false);
+    void buildBrigadesGrid();
+    brigadesPage.classList.add("open");
+  } else {
+    setBoardUiMode(true);
+    void renderMasterBoards();
+    masterBoardsPage.classList.add("open");
+  }
 }
 
 function applyAuthenticatedSession(session) {
@@ -611,6 +930,9 @@ function performLogout() {
   if (supervisorShowcaseModal) {
     supervisorShowcaseModal.hidden = true;
     if (supervisorShowcaseImage) supervisorShowcaseImage.removeAttribute("src");
+  }
+  if (supervisorReviewPage) {
+    supervisorReviewPage.classList.remove("open");
   }
 
   const gateBackdrop = document.getElementById("gate-backdrop");
@@ -700,6 +1022,7 @@ document.querySelectorAll(".side-panel-nav li").forEach((li) => {
       setBoardUiMode(false);
       boardPage.classList.remove("open");
       brigadesPage.classList.remove("open");
+      if (supervisorReviewPage) supervisorReviewPage.classList.remove("open");
       masterBoardsPage.classList.remove("open");
       return;
     }
@@ -707,6 +1030,7 @@ document.querySelectorAll(".side-panel-nav li").forEach((li) => {
       if (!activeSession) return;
       boardPage.classList.remove("open");
       brigadesPage.classList.remove("open");
+      if (supervisorReviewPage) supervisorReviewPage.classList.remove("open");
       masterBoardsPage.classList.remove("open");
       if (activeSession.role === "master") {
         setBoardUiMode(true);
@@ -733,6 +1057,12 @@ if (sidePanelLogout) {
 document.querySelector(".brigades-back-btn").addEventListener("click", () => {
   brigadesPage.classList.remove("open");
 });
+
+if (supervisorReviewBackBtn) {
+  supervisorReviewBackBtn.addEventListener("click", () => {
+    closeSupervisorReviewPage();
+  });
+}
 
 if (masterBoardsBackBtn) {
   masterBoardsBackBtn.addEventListener("click", () => {
@@ -778,23 +1108,63 @@ if (supervisorShowcaseOpenFabric) {
   });
 }
 
+if (supervisorCommentsForm) {
+  supervisorCommentsForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!activeSession) return;
+    if (!supervisorReviewBb || !supervisorReviewBoardId) return;
+    const body = String(supervisorCommentInput?.value || "").trim();
+    if (!body) {
+      setSupervisorCommentsStatus("Введите комментарий.");
+      return;
+    }
+    if (supervisorCommentSubmit) supervisorCommentSubmit.disabled = true;
+    setSupervisorCommentsStatus("Отправка...");
+    try {
+      const r = await fetch(
+        `${API_BASE}/board-comments/${supervisorReviewBb}/${encodeURIComponent(supervisorReviewBoardId)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            authorName: activeSession.name || "Начальник",
+            body,
+          }),
+        },
+      );
+      if (!r.ok) {
+        let msg = "";
+        try {
+          const payload = await r.json();
+          msg = payload?.error || "";
+        } catch {}
+        throw new Error(msg || "Не удалось отправить комментарий.");
+      }
+      if (supervisorCommentInput) supervisorCommentInput.value = "";
+      setSupervisorCommentsStatus("Комментарий сохранен.");
+      await loadSupervisorComments(supervisorReviewBb, supervisorReviewBoardId);
+    } catch (err) {
+      setSupervisorCommentsStatus(String(err?.message || "Ошибка сохранения комментария."));
+    } finally {
+      if (supervisorCommentSubmit) supervisorCommentSubmit.disabled = false;
+    }
+  });
+}
+
 window.addEventListener("message", (event) => {
   const data = event.data;
   if (!data) return;
+  if (data.type === "fabric-back-request") {
+    closeBoardToPreviousScreen();
+    return;
+  }
   if (data.type === "fabric-exit-request") {
-    requestFabricSave({ chooseArea: true }, () => {
-      boardPage.classList.remove("open");
-      fabricBoardFrame.src = "about:blank";
-      if (activeSession?.role === "supervisor") {
-        setBoardUiMode(false);
-        void buildBrigadesGrid();
-        brigadesPage.classList.add("open");
-      } else {
-        setBoardUiMode(true);
-        void renderMasterBoards();
-        masterBoardsPage.classList.add("open");
-      }
-    });
+    // Если у роли нет прав редактирования, выходим без сохранения.
+    if (!canEditBoard()) {
+      closeBoardToPreviousScreen();
+      return;
+    }
+    requestFabricSave({ chooseArea: true }, closeBoardToPreviousScreen);
     return;
   }
   if (data.type === "fabric-bookmark-request") {

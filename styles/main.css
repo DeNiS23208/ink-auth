@@ -301,11 +301,15 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   transition: left 0.5s ease;
   z-index: 999;
-  padding: 20px;
+  padding: 72px 16px 28px;
   box-sizing: border-box;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 .brigades-page.open {
   left: 0;
@@ -321,11 +325,15 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   transition: left 0.5s ease;
   z-index: 999;
-  padding: 20px;
+  padding: 72px 16px 28px;
   box-sizing: border-box;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .master-boards-page.open {
@@ -347,12 +355,19 @@ body {
   cursor: pointer;
   border-radius: 5px;
 }
+.brigades-page h2 {
+  flex-shrink: 0;
+  margin: 0 0 10px;
+  text-align: center;
+}
+
 .brigades-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
   gap: 15px;
   max-width: 800px;
   width: 100%;
+  flex-shrink: 0;
 }
 
 .master-boards-grid {
@@ -475,6 +490,15 @@ body {
   background-repeat: no-repeat;
 }
 
+.master-template-cube.master-board-cube:focus {
+  outline: none;
+}
+
+.master-template-cube.master-board-cube:focus-visible {
+  outline: 3px solid rgba(59, 130, 246, 0.85);
+  outline-offset: 2px;
+}
+
 .master-template-cube.master-add-cube {
   background: #1f7a3f;
   border-color: #165d30;
@@ -490,15 +514,15 @@ body {
 .master-template-actions {
   position: absolute;
   inset: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 8px;
-  padding: 14px;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  padding: 10px;
   background: rgba(8, 12, 22, 0.72);
   opacity: 0;
   transform: translateY(6px);
   transition: opacity 0.18s ease, transform 0.18s ease;
+  overflow-y: auto;
 }
 
 .master-template-item:hover .master-template-actions {
@@ -506,14 +530,28 @@ body {
   transform: translateY(0);
 }
 
+@media (hover: hover) and (pointer: fine) {
+  .master-template-actions {
+    pointer-events: none;
+  }
+
+  .master-template-item:hover .master-template-actions {
+    pointer-events: auto;
+  }
+}
+
 .master-template-action-btn {
   border: 1px solid rgba(255, 255, 255, 0.52);
   border-radius: 8px;
   background: rgba(16, 24, 40, 0.86);
   color: #f8fbff;
-  font-size: 0.85rem;
-  padding: 7px 10px;
+  font-size: 0.76rem;
+  line-height: 1.2;
+  padding: 6px 8px;
   cursor: pointer;
+  min-height: 30px;
+  white-space: normal;
+  position: relative;
 }
 
 .master-template-action-btn:hover {
@@ -523,6 +561,23 @@ body {
 .master-template-action-btn:last-child {
   border-color: rgba(255, 118, 118, 0.7);
   color: #ffd1d1;
+}
+
+.comment-badge {
+  position: absolute;
+  top: -8px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #dc2626;
+  color: #fff;
+  font-family: "Source Sans 3", sans-serif;
+  font-size: 0.7rem;
+  line-height: 18px;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
 }
 
 .master-preview-modal {
@@ -682,6 +737,156 @@ body {
   flex: 1;
   border: 0;
   background: #fff;
+}
+
+.supervisor-review-page {
+  position: fixed;
+  top: 0;
+  left: 100%;
+  width: 100%;
+  height: 100%;
+  background: var(--void);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  transition: left 0.5s ease;
+  z-index: 1001;
+  padding: 72px 16px 24px;
+  box-sizing: border-box;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.supervisor-review-page.open {
+  left: 0;
+}
+
+.supervisor-review-title {
+  margin: 0 0 12px;
+  color: #ecf7f0;
+  font-family: "Source Sans 3", sans-serif;
+  text-align: center;
+}
+
+.supervisor-review-image-wrap {
+  width: min(1180px, 100%);
+  min-height: 260px;
+  max-height: min(62vh, 760px);
+  border: 2px solid rgba(140, 210, 170, 0.3);
+  border-radius: 12px;
+  background: #070b12;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  margin-bottom: 12px;
+}
+
+.supervisor-review-image {
+  max-width: 100%;
+  max-height: min(58vh, 730px);
+  width: auto;
+  height: auto;
+  display: block;
+}
+
+.supervisor-review-image-empty {
+  color: rgba(200, 220, 235, 0.82);
+  font-family: "Source Sans 3", sans-serif;
+  font-size: 0.95rem;
+  text-align: center;
+  padding: 16px;
+}
+
+.supervisor-review-comments {
+  width: min(1180px, 100%);
+  background: rgba(247, 249, 252, 0.98);
+  border: 1px solid rgba(15, 23, 42, 0.15);
+  border-radius: 12px;
+  padding: 10px 12px 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.supervisor-review-comments-title {
+  margin: 0;
+  font-family: "Source Sans 3", sans-serif;
+  font-size: 1rem;
+  color: #0f172a;
+}
+
+.supervisor-comments-list {
+  max-height: min(28vh, 220px);
+  overflow: auto;
+  border: 1px solid rgba(15, 23, 42, 0.15);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 8px;
+  display: grid;
+  gap: 8px;
+}
+
+.supervisor-comments-empty {
+  margin: 2px 0;
+  color: #475569;
+  font-family: "Source Sans 3", sans-serif;
+}
+
+.supervisor-comment-item {
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  border-radius: 8px;
+  padding: 8px;
+  background: #f8fafc;
+}
+
+.supervisor-comment-item-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-family: "Source Sans 3", sans-serif;
+  font-size: 0.8rem;
+  color: #334155;
+}
+
+.supervisor-comment-item-text {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #0f172a;
+  font-family: "Source Sans 3", sans-serif;
+  font-size: 0.92rem;
+}
+
+.supervisor-comments-form {
+  display: grid;
+  gap: 6px;
+}
+
+.supervisor-comment-input {
+  width: 100%;
+  resize: vertical;
+  min-height: 70px;
+  max-height: 180px;
+  border-radius: 8px;
+  border: 1px solid rgba(51, 65, 85, 0.35);
+  padding: 8px 10px;
+  font-family: "Source Sans 3", sans-serif;
+  font-size: 0.95rem;
+}
+
+.supervisor-comments-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.supervisor-comments-status {
+  font-family: "Source Sans 3", sans-serif;
+  font-size: 0.82rem;
+  color: #334155;
 }
 
 .fabric-board-title {
@@ -993,9 +1198,10 @@ body {
 
 /* --- Начальник: сетка «доска на показ» --- */
 .brigades-page-hint {
+  flex-shrink: 0;
   max-width: 920px;
   width: 100%;
-  margin: 0 0 18px;
+  margin: 0 0 14px;
   padding: 0 8px;
   color: rgba(220, 230, 245, 0.88);
   font-family: "Source Sans 3", sans-serif;
@@ -1004,20 +1210,39 @@ body {
 }
 
 .brigades-grid--showcase {
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 18px;
-  max-width: 1280px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 160px), 1fr));
+  gap: 12px;
+  max-width: min(1180px, 100%);
+  width: 100%;
+  align-self: stretch;
+  flex-shrink: 0;
+  padding-bottom: 12px;
+}
+
+@media (min-width: 640px) {
+  .brigades-grid--showcase {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
+    gap: 14px;
+  }
+}
+
+@media (min-width: 1100px) {
+  .brigades-grid--showcase {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+    gap: 16px;
+  }
 }
 
 .supervisor-bb-card {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 12px;
+  padding: 10px;
   border-radius: 12px;
   background: rgba(12, 22, 36, 0.55);
   border: 1px solid rgba(120, 200, 160, 0.35);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  min-width: 0;
 }
 
 .supervisor-bb-card-head {
@@ -1033,6 +1258,7 @@ body {
   display: block;
   width: 100%;
   aspect-ratio: 16 / 10;
+  max-height: min(220px, 38vh);
   margin: 0;
   padding: 0;
   border: 2px solid rgba(255, 255, 255, 0.2);
@@ -1086,6 +1312,24 @@ body {
 
 .supervisor-bb-card-open:hover {
   background: rgba(30, 90, 58, 0.75);
+}
+
+.supervisor-bb-card-comment {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(230, 186, 110, 0.5);
+  background: rgba(92, 62, 16, 0.6);
+  color: #fff2d1;
+  font-family: "Source Sans 3", sans-serif;
+  font-size: 0.82rem;
+  cursor: pointer;
+  position: relative;
+}
+
+.supervisor-bb-card-comment:hover {
+  background: rgba(120, 82, 20, 0.74);
 }
 
 .supervisor-showcase-modal {

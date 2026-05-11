@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Bad+Script&family=Caveat:wght@400;700&family=Cinzel:wght@500;600&family=Kalam:wght@400;700&family=Marck+Script&family=Neucha&family=Patrick+Hand&family=Source+Sans+3:wght@400;600&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles/main.css?v=20260511-2" />
+    <link rel="stylesheet" href="styles/main.css?v=20260511-8" />
     <link rel="stylesheet" href="styles/gate-themes.css?v=20260509-4" />
     <link rel="stylesheet" href="styles/gate-entry.css?v=20260509-4" />
   </head>
@@ -129,6 +129,38 @@
           </div>
         </div>
       </div>
+      <div class="supervisor-review-page" id="supervisor-review-page">
+        <button type="button" class="back-btn supervisor-review-back-btn" id="supervisor-review-back-btn">
+          ← К бригадам
+        </button>
+        <h2 class="supervisor-review-title" id="supervisor-review-title">ББ — ревью</h2>
+        <div class="supervisor-review-image-wrap" id="supervisor-review-image-wrap">
+          <img id="supervisor-review-image" class="supervisor-review-image" alt="Доска бригады" hidden />
+          <div id="supervisor-review-image-empty" class="supervisor-review-image-empty">
+            Мастер не выставил доску на показ.
+          </div>
+        </div>
+        <section class="supervisor-review-comments" aria-label="Комментарии начальника">
+          <h3 class="supervisor-review-comments-title">Комментарии начальника</h3>
+          <div class="supervisor-comments-list" id="supervisor-comments-list">
+            <p class="supervisor-comments-empty">Комментариев пока нет.</p>
+          </div>
+          <form class="supervisor-comments-form" id="supervisor-comments-form">
+            <textarea
+              id="supervisor-comment-input"
+              class="supervisor-comment-input"
+              rows="3"
+              maxlength="1500"
+              placeholder="Оставьте комментарий по этой доске..."
+              required
+            ></textarea>
+            <div class="supervisor-comments-actions">
+              <span class="supervisor-comments-status" id="supervisor-comments-status"></span>
+              <button type="submit" id="supervisor-comment-submit">Отправить комментарий</button>
+            </div>
+          </form>
+        </section>
+      </div>
       <div class="master-boards-page">
         <button type="button" class="back-btn master-boards-back-btn">
           ← Главное меню
@@ -242,7 +274,7 @@
     </svg>
     <script defer src="scripts/utils.js?v=20260509-4"></script>
     <script defer src="scripts/auth.js?v=20260509-4"></script>
-    <script defer src="scripts/main.js?v=20260511-1"></script>
+    <script defer src="scripts/main.js?v=20260511-12"></script>
     <script defer src="scripts/gate-entry.js?v=20260509-4"></script>
   </body>
 </html>
