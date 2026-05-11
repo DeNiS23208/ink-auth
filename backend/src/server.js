@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import express from "express";
 import pg from "pg";
 
@@ -164,7 +165,8 @@ app.put("/api/board-state/:bb/:boardId", async (req, res) => {
   }
 });
 
-const staticRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const staticRoot = path.resolve(__dirname, "..", "..");
 if (fs.existsSync(path.join(staticRoot, "index.html"))) {
   app.use(express.static(staticRoot));
 }
