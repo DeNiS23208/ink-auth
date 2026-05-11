@@ -19,3 +19,11 @@ CREATE TABLE IF NOT EXISTS board_states (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (bb, board_id)
 );
+
+-- Одна «витрина» на ББ: какой шаблон и какая картинка видна начальнику без открытия редактора
+CREATE TABLE IF NOT EXISTS bb_showcase (
+  bb INTEGER PRIMARY KEY,
+  board_id TEXT NOT NULL,
+  image_png TEXT,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

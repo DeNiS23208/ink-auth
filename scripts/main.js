@@ -22,6 +22,16 @@ const masterPreviewModal = document.getElementById("master-preview-modal");
 const masterPreviewTitle = document.getElementById("master-preview-title");
 const masterPreviewImage = document.getElementById("master-preview-image");
 const masterPreviewClose = document.getElementById("master-preview-close");
+const brigadesPageHint = document.querySelector(".brigades-page-hint");
+const supervisorShowcaseModal = document.getElementById("supervisor-showcase-modal");
+const supervisorShowcaseClose = document.getElementById("supervisor-showcase-close");
+const supervisorShowcaseTitle = document.getElementById("supervisor-showcase-title");
+const supervisorShowcaseImage = document.getElementById("supervisor-showcase-image");
+const supervisorShowcaseOpenFabric = document.getElementById("supervisor-showcase-open-fabric");
+
+let supervisorModalBb = null;
+let supervisorModalBoardId = "board-1";
+let supervisorModalBoardName = "Шаблон 1";
 
 const GATE_MS = 1350;
 const IGNITE_BEFORE_OPEN_MS = window.matchMedia("(prefers-reduced-motion: reduce)").matches
@@ -171,6 +181,16 @@ function deleteMasterBoard(bb, boardId) {
   localStorage.removeItem(getMasterBoardPreviewKey(bb, boardId));
   const bookmarks = loadBookmarks().filter((x) => !(x.bb === bb && x.boardId === boardId));
   saveBookmarks(bookmarks);
+  void (async () => {
+    try {
+      const r = await fetch(`${API_BASE}/showcase/${bb}`);
+      if (!r.ok) return;
+      const j = await r.json();
+      if (j.boardId === boardId) {
+        await fetch(`${API_BASE}/showcase/${bb}`, { method: "DELETE" });
+      }
+    } catch {}
+  })();
 }
 
 function createMasterBoard(bb) {
@@ -215,6 +235,58 @@ function renameMasterBoard(bb, boardId, newName) {
   return true;
 }
 
+async function pickBestPreviewDataUrl(bb, boardId) {
+  const prev = localStorage.getItem(getMasterBoardPreviewKey(bb, boardId));
+  const thumb = localStorage.getItem(getMasterBoardThumbKey(bb, boardId));
+  let srv = null;
+  try {
+    const r = await fetch(`${API_BASE}/board-state/${bb}/${boardId}?previewOnly=1`);
+    if (r.ok) {
+      const payload = await r.json();
+      if (payload?.found) srv = payload.preview || payload.thumb;
+    }
+  } catch {}
+  const parts = [prev, thumb, srv].filter((x) => typeof x === "string" && x.startsWith("data:"));
+  if (!parts.length) return null;
+  return parts.reduce((a, b) => (b.length > a.length ? b : a));
+}
+
+async function putMasterShowcaseBoard(bb, boardId) {
+  const imageDataUrl = await pickBestPreviewDataUrl(bb, boardId);
+  const res = await fetch(`${API_BASE}/showcase/${bb}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      boardId,
+      ...(imageDataUrl ? { imageDataUrl } : {}),
+    }),
+  });
+  let msg = "";
+  try {
+    const j = await res.json();
+    msg = j.error || "";
+  } catch {}
+  if (!res.ok) {
+    window.alert(
+      msg ||
+        "Не удалось поставить на показ. Сохраните шаблон и при выходе выделите область для превью.",
+    );
+    return;
+  }
+  window.alert("Этот шаблон выставлен на показ для начальника.");
+}
+
+async function fetchShowcaseBoardIdForBb(bb) {
+  try {
+    const r = await fetch(`${API_BASE}/showcase/${bb}`);
+    if (!r.ok) return null;
+    const j = await r.json();
+    return typeof j.boardId === "string" ? j.boardId : null;
+  } catch {
+    return null;
+  }
+}
+
 function promptRenameMasterBoard(board) {
   if (!activeSession || activeSession.role !== "master") return;
   const next = window.prompt("Новое имя шаблона", board.name);
@@ -246,11 +318,15 @@ async function renderMasterBoards() {
       } catch {}
     }),
   );
+  const showcaseBoardId = await fetchShowcaseBoardIdForBb(activeSession.bb);
   const addItem = document.createElement("div");
   addItem.className = "master-template-item";
   boards.forEach((board) => {
     const item = document.createElement("div");
     item.className = "master-template-item";
+    if (showcaseBoardId && board.id === showcaseBoardId) {
+      item.classList.add("master-template-item--showcase");
+    }
     const cube = document.createElement("button");
     cube.type = "button";
     cube.className = "master-template-cube master-board-cube";
@@ -293,6 +369,15 @@ async function renderMasterBoards() {
       masterPreviewImage.src = preview;
       masterPreviewModal.hidden = false;
     });
+    const showcaseBtn = document.createElement("button");
+    showcaseBtn.type = "button";
+    showcaseBtn.className = "master-template-action-btn master-template-action-btn--showcase";
+    showcaseBtn.textContent = "Поставить на показ";
+    showcaseBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      await putMasterShowcaseBoard(activeSession.bb, board.id);
+      void renderMasterBoards();
+    });
     const renameMenuBtn = document.createElement("button");
     renameMenuBtn.type = "button";
     renameMenuBtn.className = "master-template-action-btn";
@@ -314,6 +399,7 @@ async function renderMasterBoards() {
     });
     actions.appendChild(openBtn);
     actions.appendChild(previewBtn);
+    actions.appendChild(showcaseBtn);
     actions.appendChild(renameMenuBtn);
     actions.appendChild(deleteBtn);
     cube.appendChild(actions);
@@ -357,25 +443,84 @@ async function renderMasterBoards() {
   masterBoardsGrid.prepend(addItem);
 }
 
-function buildBrigadesGrid() {
+async function buildBrigadesGrid() {
   brigadesGrid.replaceChildren();
   if (!activeSession || activeSession.role !== "supervisor") return;
+  if (brigadesPageHint) brigadesPageHint.style.display = "";
+  let rows = [];
+  try {
+    const res = await fetch(`${API_BASE}/showcase-boards`);
+    if (res.ok) rows = await res.json();
+  } catch {}
+  const byBb = new Map(rows.map((r) => [Number(r.bb), r]));
   for (let i = 1; i <= 30; i += 1) {
-    const cube = document.createElement("button");
-    cube.type = "button";
-    cube.className = "brigade-cube";
-    cube.textContent = `ББ${i}`;
-    cube.addEventListener("click", () => openBoard(i));
-    brigadesGrid.appendChild(cube);
+    const row = byBb.get(i) || {};
+    const card = document.createElement("div");
+    card.className = "supervisor-bb-card";
+    card.dataset.bb = String(i);
+    const label = document.createElement("div");
+    label.className = "supervisor-bb-card-head";
+    label.textContent = `ББ ${i}`;
+    const previewWrap = document.createElement("button");
+    previewWrap.type = "button";
+    previewWrap.className = "supervisor-bb-card-preview";
+    previewWrap.setAttribute("aria-label", `Увеличить доску ББ ${i}`);
+    if (row.image) {
+      const img = document.createElement("img");
+      img.src = row.image;
+      img.alt = row.boardName || `Доска ББ ${i}`;
+      img.decoding = "async";
+      img.loading = "lazy";
+      img.width = 800;
+      img.height = 500;
+      previewWrap.appendChild(img);
+    } else {
+      const ph = document.createElement("div");
+      ph.className = "supervisor-bb-card-placeholder";
+      ph.textContent = "Мастер не выставил доску на показ";
+      previewWrap.appendChild(ph);
+    }
+    previewWrap.addEventListener("click", () => {
+      if (!row.image) return;
+      supervisorModalBb = i;
+      supervisorModalBoardId = row.boardId || "board-1";
+      supervisorModalBoardName = row.boardName || "Шаблон";
+      if (supervisorShowcaseTitle) {
+        supervisorShowcaseTitle.textContent = `ББ ${i} — ${supervisorModalBoardName}`;
+      }
+      if (supervisorShowcaseImage) {
+        supervisorShowcaseImage.src = row.image;
+        supervisorShowcaseImage.alt = supervisorModalBoardName;
+      }
+      if (supervisorShowcaseModal) supervisorShowcaseModal.hidden = false;
+    });
+    const sub = document.createElement("div");
+    sub.className = "supervisor-bb-card-sub";
+    sub.textContent = row.boardName || (row.boardId ? String(row.boardId) : "—");
+    const openEdit = document.createElement("button");
+    openEdit.type = "button";
+    openEdit.className = "supervisor-bb-card-open";
+    openEdit.textContent = "Открыть в редакторе (просмотр)";
+    openEdit.addEventListener("click", () => {
+      openBoard(i, row.boardId || "board-1", row.boardName || "Шаблон 1");
+    });
+    card.appendChild(label);
+    card.appendChild(previewWrap);
+    card.appendChild(sub);
+    card.appendChild(openEdit);
+    brigadesGrid.appendChild(card);
   }
 }
 
 function applyRoleToBrigadesPage() {
   if (!brigadesPageTitle) return;
-  brigadesPageTitle.textContent =
-    activeSession?.role === "supervisor"
-      ? "Выберите буровую бригаду"
-      : "Список бригад доступен начальнику";
+  if (activeSession?.role === "supervisor") {
+    brigadesPageTitle.textContent = "Доски бригад на показ";
+    if (brigadesPageHint) brigadesPageHint.style.display = "";
+  } else {
+    brigadesPageTitle.textContent = "Список бригад доступен начальнику";
+    if (brigadesPageHint) brigadesPageHint.style.display = "none";
+  }
 }
 
 function setBoardEditable(editable) {
@@ -398,7 +543,7 @@ function openBoard(bb, boardId = "board-1", boardName = "Шаблон 1") {
     bb: String(bb),
     board: boardId,
     readonly: canEditBoard() ? "0" : "1",
-    v: "20260509-3",
+    v: "20260511-1",
   });
   fabricBoardFrame.src = `test.html?${params.toString()}`;
   setBoardUiMode(true);
@@ -430,7 +575,7 @@ function applyAuthenticatedSession(session) {
   if (sidePanel) sidePanel.style.display = "";
   updateWelcomeHeading();
   updateNavBoardsLabel();
-  buildBrigadesGrid();
+  void buildBrigadesGrid();
   void renderMasterBoards();
   applyRoleToBrigadesPage();
   updateBoardBackButton();
@@ -462,6 +607,10 @@ function performLogout() {
   if (masterPreviewModal) {
     masterPreviewModal.hidden = true;
     if (masterPreviewImage) masterPreviewImage.removeAttribute("src");
+  }
+  if (supervisorShowcaseModal) {
+    supervisorShowcaseModal.hidden = true;
+    if (supervisorShowcaseImage) supervisorShowcaseImage.removeAttribute("src");
   }
 
   const gateBackdrop = document.getElementById("gate-backdrop");
@@ -497,7 +646,7 @@ if (form) {
     if (sidePanel) sidePanel.style.display = "";
     updateWelcomeHeading();
     updateNavBoardsLabel();
-    buildBrigadesGrid();
+    void buildBrigadesGrid();
     void renderMasterBoards();
     applyRoleToBrigadesPage();
     updateBoardBackButton();
@@ -565,6 +714,7 @@ document.querySelectorAll(".side-panel-nav li").forEach((li) => {
         masterBoardsPage.classList.add("open");
       } else {
         setBoardUiMode(false);
+        void buildBrigadesGrid();
         brigadesPage.classList.add("open");
       }
     }
@@ -605,6 +755,29 @@ if (masterPreviewModal) {
   });
 }
 
+function closeSupervisorShowcaseModal() {
+  if (!supervisorShowcaseModal) return;
+  supervisorShowcaseModal.hidden = true;
+  if (supervisorShowcaseImage) supervisorShowcaseImage.removeAttribute("src");
+}
+
+if (supervisorShowcaseClose) {
+  supervisorShowcaseClose.addEventListener("click", closeSupervisorShowcaseModal);
+}
+if (supervisorShowcaseModal) {
+  supervisorShowcaseModal.addEventListener("click", (e) => {
+    if (e.target !== supervisorShowcaseModal) return;
+    closeSupervisorShowcaseModal();
+  });
+}
+if (supervisorShowcaseOpenFabric) {
+  supervisorShowcaseOpenFabric.addEventListener("click", () => {
+    if (supervisorModalBb == null) return;
+    closeSupervisorShowcaseModal();
+    openBoard(supervisorModalBb, supervisorModalBoardId, supervisorModalBoardName);
+  });
+}
+
 window.addEventListener("message", (event) => {
   const data = event.data;
   if (!data) return;
@@ -614,6 +787,7 @@ window.addEventListener("message", (event) => {
       fabricBoardFrame.src = "about:blank";
       if (activeSession?.role === "supervisor") {
         setBoardUiMode(false);
+        void buildBrigadesGrid();
         brigadesPage.classList.add("open");
       } else {
         setBoardUiMode(true);

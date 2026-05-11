@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Bad+Script&family=Caveat:wght@400;700&family=Cinzel:wght@500;600&family=Kalam:wght@400;700&family=Marck+Script&family=Neucha&family=Patrick+Hand&family=Source+Sans+3:wght@400;600&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles/main.css?v=20260509-6" />
+    <link rel="stylesheet" href="styles/main.css?v=20260511-2" />
     <link rel="stylesheet" href="styles/gate-themes.css?v=20260509-4" />
     <link rel="stylesheet" href="styles/gate-entry.css?v=20260509-4" />
   </head>
@@ -106,9 +106,27 @@
         <button type="button" class="back-btn brigades-back-btn">
           ← Назад
         </button>
-        <h2>Выберите буровую бригаду</h2>
-        <div class="brigades-grid">
-          <!-- Генерируем 30 кубиков -->
+        <h2 class="brigades-page-heading">Доски бригад на показ</h2>
+        <p class="brigades-page-hint">
+          У каждой ББ — картинка той доски, которую мастер выставил кнопкой «Поставить на показ». Нажмите на
+          картинку, чтобы увеличить.
+        </p>
+        <div class="brigades-grid brigades-grid--showcase">
+          <!-- 30 карточек с превью для начальника -->
+        </div>
+        <div class="supervisor-showcase-modal" id="supervisor-showcase-modal" hidden>
+          <div class="supervisor-showcase-card">
+            <button type="button" class="supervisor-showcase-close" id="supervisor-showcase-close" aria-label="Закрыть">
+              ✕
+            </button>
+            <h3 class="supervisor-showcase-title" id="supervisor-showcase-title">ББ</h3>
+            <div class="supervisor-showcase-image-wrap">
+              <img id="supervisor-showcase-image" class="supervisor-showcase-image" alt="Доска на показ" />
+            </div>
+            <button type="button" class="supervisor-showcase-open-fabric" id="supervisor-showcase-open-fabric">
+              Открыть в редакторе (просмотр)
+            </button>
+          </div>
         </div>
       </div>
       <div class="master-boards-page">
@@ -224,7 +242,7 @@
     </svg>
     <script defer src="scripts/utils.js?v=20260509-4"></script>
     <script defer src="scripts/auth.js?v=20260509-4"></script>
-    <script defer src="scripts/main.js?v=20260509-6"></script>
+    <script defer src="scripts/main.js?v=20260511-1"></script>
     <script defer src="scripts/gate-entry.js?v=20260509-4"></script>
   </body>
 </html>
